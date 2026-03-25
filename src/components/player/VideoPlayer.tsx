@@ -65,18 +65,28 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
     }, delay);
   }, [currentUrlIndex, allUrls.length]);
 
-  // Resolve secure stream URL
+  // Check resume position & resolve secure stream URL
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
+    setShowResumePrompt(false);
 
     const id = channelId || `ch-${activeUrl}`;
+    
+    // Check resume position
+    getResumePosition(id).then(pos => {
+      if (!cancelled && pos && pos > 5) {
+        setResumePosition(pos);
+        setShowResumePrompt(true);
+      }
+    });
+
     getSecureStreamUrl(id, activeUrl).then(secureUrl => {
       if (!cancelled) setResolvedUrl(secureUrl);
     }).catch(() => {
-      if (!cancelled) setResolvedUrl(activeUrl); // fallback to direct
+      if (!cancelled) setResolvedUrl(activeUrl);
     });
 
     return () => { cancelled = true; };
