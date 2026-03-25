@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Radio, Server, Upload, Trash2, Play, Plus, Edit2, Check, X, FileText, List } from 'lucide-react';
+import { Radio, Server, Upload, Trash2, Play, Plus, Edit2, Check, X, FileText, List, Download } from 'lucide-react';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
 
 export interface SavedPlaylist {
