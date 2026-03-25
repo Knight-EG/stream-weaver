@@ -137,12 +137,13 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
                 <label className="text-sm font-medium text-foreground">Server URL</label>
                 <input
                   type="url"
-                  placeholder="http://provider.example.com"
+                  placeholder="http://provider.example.com:8080"
                   value={server}
                   onChange={(e) => setServer(e.target.value)}
                   className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable"
                   data-focusable="true"
                 />
+                <p className="text-xs text-muted-foreground">⚠️ تأكد من كتابة البورت في الرابط (مثال: :8080 أو :2095)</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Username</label>
