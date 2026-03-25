@@ -49,6 +49,7 @@ export default function Admin() {
   }
 
   async function toggleDevice(deviceId: string, isActive: boolean) { await supabase.from('devices').update({ is_active: !isActive }).eq('id', deviceId); loadData(); }
+  async function updateMaxDevices(userId: string, newMax: number) { await supabase.from('profiles').update({ max_devices: newMax }).eq('user_id', userId); setProfiles(prev => prev.map(p => p.user_id === userId ? { ...p, max_devices: newMax } : p)); }
   async function deleteDevice(deviceId: string) { await supabase.from('devices').update({ is_active: false }).eq('id', deviceId); loadData(); }
   async function suspendSubscription(subId: string) { await supabase.from('subscriptions').update({ status: 'suspended' } as any).eq('id', subId); loadData(); }
   async function expireSubscription(subId: string) { await supabase.from('subscriptions').update({ status: 'expired' } as any).eq('id', subId); loadData(); }
