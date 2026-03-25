@@ -1,7 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getDeviceId } from './device';
 
-interface StreamToken {
+interface StreamTokenResponse {
   stream_url: string;
   expires_in: number;
 }
@@ -10,8 +9,7 @@ const tokenCache = new Map<string, { url: string; expiresAt: number }>();
 
 /**
  * Get a secure, tokenized stream URL via the backend proxy.
- * Validates subscription + device before granting access.
- * Caches tokens for 4 minutes (tokens last 5 min).
+ * Falls back to direct URL on any failure (timeout, auth, no subscription, etc.)
  */
 export async function getSecureStreamUrl(channelId: string, channelUrl: string): Promise<string> {
   // Check cache first
@@ -20,38 +18,39 @@ export async function getSecureStreamUrl(channelId: string, channelUrl: string):
     return cached.url;
   }
 
-  const deviceId = getDeviceId();
+  try {
+    // Race: proxy call vs 5-second timeout
+    const result = await Promise.race([
+      supabase.functions.invoke('stream-proxy', {
+        body: {
+          action: 'get_token',
+          channel_id: channelId,
+          channel_url: channelUrl,
+        },
+      }),
+      new Promise<{ data: null; error: Error }>((_, reject) => 
+        setTimeout(() => reject(new Error('Proxy timeout')), 5000)
+      ),
+    ]);
 
-  const { data, error } = await supabase.functions.invoke('stream-proxy', {
-    body: {
-      channel_id: channelId,
-      channel_url: channelUrl,
-      device_id: deviceId,
-      action: 'get_token',
-    },
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+    if (result.error || !result.data?.stream_url) {
+      console.warn('[stream-proxy] Failed, using direct URL:', result.error?.message || 'No stream_url returned');
+      return channelUrl;
+    }
 
-  // If proxy fails (no subscription, etc.), fall back to direct URL
-  if (error || !data?.stream_url) {
-    console.warn('Stream proxy unavailable, using direct URL:', error?.message || 'No stream_url');
+    // Cache for 4 minutes (token lasts 5)
+    tokenCache.set(channelId, {
+      url: result.data.stream_url,
+      expiresAt: Date.now() + 4 * 60 * 1000,
+    });
+
+    return result.data.stream_url;
+  } catch (err) {
+    console.warn('[stream-proxy] Error, using direct URL:', err instanceof Error ? err.message : err);
     return channelUrl;
   }
-
-  // Cache for 4 minutes
-  tokenCache.set(channelId, {
-    url: data.stream_url,
-    expiresAt: Date.now() + 4 * 60 * 1000,
-  });
-
-  return data.stream_url;
 }
 
-/**
- * Clear cached stream tokens (e.g., on logout)
- */
 export function clearStreamTokens(): void {
   tokenCache.clear();
 }

@@ -5,10 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Simple HMAC-like token generation using Web Crypto
-async function generateStreamToken(channelId: string, deviceId: string, userId: string, expiresAt: number): Promise<string> {
+// HMAC token generation
+async function generateStreamToken(channelId: string, userId: string, expiresAt: number): Promise<string> {
   const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const data = `${channelId}:${deviceId}:${userId}:${expiresAt}`;
+  const data = `${channelId}:${userId}:${expiresAt}`;
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
@@ -16,7 +16,7 @@ async function generateStreamToken(channelId: string, deviceId: string, userId: 
   return btoa(JSON.stringify({ d: data, h: hash, e: expiresAt }));
 }
 
-async function verifyStreamToken(token: string): Promise<{ valid: boolean; channelId?: string; deviceId?: string; userId?: string }> {
+async function verifyStreamToken(token: string): Promise<{ valid: boolean; channelId?: string; userId?: string }> {
   try {
     const { d, h, e } = JSON.parse(atob(token));
     if (Date.now() > e) return { valid: false };
@@ -26,8 +26,8 @@ async function verifyStreamToken(token: string): Promise<{ valid: boolean; chann
     const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(d));
     const expectedHash = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
     if (h !== expectedHash) return { valid: false };
-    const [channelId, deviceId, userId] = d.split(':');
-    return { valid: true, channelId, deviceId, userId };
+    const parts = d.split(':');
+    return { valid: true, channelId: parts[0], userId: parts[1] };
   } catch {
     return { valid: false };
   }
@@ -40,53 +40,66 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+    
+    // Extract action from query params OR POST body
     let action = url.searchParams.get('action');
+    let body: any = null;
 
-    if (!action && req.method === 'POST') {
+    if (req.method === 'POST') {
       try {
-        const clonedReq = req.clone();
-        const body = await clonedReq.json();
-        if (typeof body?.action === 'string') {
+        body = await req.json();
+        if (!action && typeof body?.action === 'string') {
           action = body.action;
         }
       } catch {
-        // ignore invalid JSON here; main handler will validate later
+        // Not JSON - that's ok for some actions
       }
     }
 
-    // Action 1: Generate a stream token (requires auth)
+    console.log(`[stream-proxy] action=${action}, method=${req.method}`);
+
+    // === GET TOKEN (requires auth) ===
     if (action === 'get_token') {
       const authHeader = req.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.log('[stream-proxy] Missing auth header');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
 
+      // Verify user
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_ANON_KEY')!,
         { global: { headers: { Authorization: authHeader } } }
       );
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims?.sub) {
+        console.log('[stream-proxy] Auth failed:', claimsError?.message);
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
 
-      const userId = user.id;
-      const body = await req.json();
-      const { channel_id, channel_url, device_id } = body;
+      const userId = claimsData.claims.sub as string;
+      const { channel_id, channel_url } = body || {};
 
-      if (!channel_id || !channel_url || !device_id) {
-        return new Response(JSON.stringify({ error: 'Missing channel_id, channel_url, or device_id' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (!channel_id || !channel_url) {
+        return new Response(JSON.stringify({ error: 'Missing channel_id or channel_url' }), { 
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
 
-      // Use service role client for checking subscription/device
+      // Admin client for DB checks
       const adminClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // Check trial / subscription access
+      // Check trial OR subscription
       const { data: profile } = await adminClient
         .from('profiles')
         .select('trial_ends_at')
@@ -106,39 +119,27 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!sub && !hasTrialAccess) {
-        return new Response(JSON.stringify({ error: 'No active subscription or trial access' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        console.log(`[stream-proxy] No access for user ${userId}`);
+        return new Response(JSON.stringify({ error: 'No active subscription or trial' }), { 
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
 
-      // Check device is active and belongs to user
-      const { data: device } = await adminClient
-        .from('devices')
-        .select('id, is_active')
-        .eq('user_id', userId)
-        .eq('device_id', device_id)
-        .eq('is_active', true)
-        .maybeSingle();
+      console.log(`[stream-proxy] Access granted for user ${userId}, trial=${hasTrialAccess}, sub=${!!sub}`);
 
-      if (!device) {
-        return new Response(JSON.stringify({ error: 'Device not authorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
-      // Update last_seen
-      await adminClient.from('devices').update({ last_seen_at: new Date().toISOString() }).eq('id', device.id);
-
-      // Generate short-lived token (5 minutes)
+      // Generate 5-minute token
       const expiresAt = Date.now() + 5 * 60 * 1000;
-      const token = await generateStreamToken(channel_id, device_id, userId, expiresAt);
+      const streamToken = await generateStreamToken(channel_id, userId, expiresAt);
 
-      // Return tokenized URL
       const proxyBase = `${Deno.env.get('SUPABASE_URL')}/functions/v1/stream-proxy`;
-      const streamUrl = `${proxyBase}?action=play&token=${encodeURIComponent(token)}&url=${encodeURIComponent(channel_url)}`;
+      const streamUrl = `${proxyBase}?action=play&token=${encodeURIComponent(streamToken)}&url=${encodeURIComponent(channel_url)}`;
 
       return new Response(JSON.stringify({ stream_url: streamUrl, expires_in: 300 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Action 2: Proxy the stream (token-based, no auth header needed)
+    // === PLAY STREAM (token-based, no auth needed) ===
     if (action === 'play') {
       const token = url.searchParams.get('token');
       const streamUrl = url.searchParams.get('url');
@@ -152,27 +153,35 @@ Deno.serve(async (req) => {
         return new Response('Token expired or invalid', { status: 403, headers: corsHeaders });
       }
 
-      // Proxy the stream
-      const streamRes = await fetch(streamUrl, {
-        headers: {
-          'User-Agent': 'IPTVPlayer/1.0',
-        },
-      });
+      console.log(`[stream-proxy] Proxying stream for channel=${verification.channelId}`);
 
-      if (!streamRes.ok) {
-        return new Response('Stream unavailable', { status: 502, headers: corsHeaders });
+      // Proxy the stream with timeout
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const streamRes = await fetch(streamUrl, {
+          headers: { 'User-Agent': 'IPTVPlayer/1.0' },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!streamRes.ok) {
+          console.log(`[stream-proxy] Upstream returned ${streamRes.status}`);
+          return new Response('Stream unavailable', { status: 502, headers: corsHeaders });
+        }
+
+        const responseHeaders = new Headers(corsHeaders);
+        const contentType = streamRes.headers.get('content-type');
+        if (contentType) responseHeaders.set('Content-Type', contentType);
+        responseHeaders.set('Cache-Control', 'no-store');
+
+        return new Response(streamRes.body, { status: 200, headers: responseHeaders });
+      } catch (fetchErr) {
+        clearTimeout(timeout);
+        console.log(`[stream-proxy] Fetch error: ${fetchErr.message}`);
+        return new Response('Stream fetch failed', { status: 502, headers: corsHeaders });
       }
-
-      // Forward the response with CORS
-      const responseHeaders = new Headers(corsHeaders);
-      const contentType = streamRes.headers.get('content-type');
-      if (contentType) responseHeaders.set('Content-Type', contentType);
-      responseHeaders.set('Cache-Control', 'no-store');
-
-      return new Response(streamRes.body, {
-        status: 200,
-        headers: responseHeaders,
-      });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action. Use get_token or play' }), {
@@ -181,6 +190,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
+    console.error(`[stream-proxy] Unhandled error: ${error.message}`);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
