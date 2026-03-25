@@ -245,19 +245,42 @@ Deno.serve(async (req) => {
       if (!server || !username || !password) {
         return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
-      const base = buildBase(server);
-      const api = `${base}/player_api.php?username=${username}&password=${password}`;
-
-      // Fetch all data in parallel
-      console.log('Fetching Xtream data via player_api.php...');
+      
+      // Find a working base URL by testing account info first
+      const apiPath = `/player_api.php?username=${username}&password=${password}`;
+      let workingBase = '';
+      
+      const bases = getAlternativeBases(server);
+      for (const base of bases) {
+        try {
+          console.log(`Testing base: ${base}`);
+          const testData = await xtreamFetch(`${base}${apiPath}`, true);
+          if (testData?.user_info) {
+            workingBase = base;
+            console.log(`Found working base: ${base}`);
+            break;
+          }
+        } catch (err) {
+          console.warn(`Base ${base} failed:`, err instanceof Error ? err.message : err);
+        }
+      }
+      
+      if (!workingBase) {
+        throw new Error('فشل الاتصال بالمزود. جميع المنافذ محجوبة. جرب تحميل ملف M3U يدوياً.');
+      }
+      
+      const api = `${workingBase}${apiPath}`;
+      
+      // Fetch all data in parallel using the working base
+      console.log(`Fetching Xtream data from ${workingBase}...`);
 
       const [liveCats, liveStreams, vodCats, vodStreams, serCats, serList] = await Promise.all([
-        xtreamFetch(`${api}&action=get_live_categories`).catch(() => []),
-        xtreamFetch(`${api}&action=get_live_streams`).catch(() => []),
-        xtreamFetch(`${api}&action=get_vod_categories`).catch(() => []),
-        xtreamFetch(`${api}&action=get_vod_streams`).catch(() => []),
-        xtreamFetch(`${api}&action=get_series_categories`).catch(() => []),
-        xtreamFetch(`${api}&action=get_series`).catch(() => []),
+        xtreamFetch(`${api}&action=get_live_categories`, false).catch(() => []),
+        xtreamFetch(`${api}&action=get_live_streams`, false).catch(() => []),
+        xtreamFetch(`${api}&action=get_vod_categories`, false).catch(() => []),
+        xtreamFetch(`${api}&action=get_vod_streams`, false).catch(() => []),
+        xtreamFetch(`${api}&action=get_series_categories`, false).catch(() => []),
+        xtreamFetch(`${api}&action=get_series`, false).catch(() => []),
       ]);
 
       console.log(`Live: ${Array.isArray(liveStreams) ? liveStreams.length : 0}, VOD: ${Array.isArray(vodStreams) ? vodStreams.length : 0}, Series: ${Array.isArray(serList) ? serList.length : 0}`);
