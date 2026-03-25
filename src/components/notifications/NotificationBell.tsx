@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Bell, Check, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, Clock, X } from 'lucide-react';
-import { useNotifications, type Notification } from '@/hooks/useNotifications';
+import { Bell, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, Clock, X } from 'lucide-react';
+import { useNotifications } from '@/hooks/useNotifications';
 
 const typeIcons: Record<string, React.ReactNode> = {
   device: <Monitor className="w-4 h-4 text-primary" />,
@@ -26,21 +27,132 @@ function timeAgo(dateStr: string): string {
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+  const updatePanelPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 16);
+    const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 120);
+
+    setPanelStyle({ top, left, width });
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+
+    updatePanelPosition();
+    const handleResize = () => updatePanelPosition();
+    const handleScroll = () => updatePanelPosition();
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, true);
+    document.addEventListener('mousedown', handleOutsideClick);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [open, updatePanelPosition]);
+
+  const panel = open && panelStyle
+    ? createPortal(
+        <div className="fixed inset-0 z-[80] pointer-events-none">
+          <div className="fixed inset-0 bg-background/50 sm:hidden pointer-events-auto" onClick={() => setOpen(false)} />
+          <div
+            ref={panelRef}
+            className="pointer-events-auto fixed bg-card border border-border rounded-xl shadow-xl overflow-hidden flex flex-col"
+            style={{
+              top: panelStyle.top,
+              left: panelStyle.left,
+              width: panelStyle.width,
+              maxHeight: 'min(24rem, calc(100vh - 5rem))',
+            }}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-border">
+              <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
+              <div className="flex gap-1">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
+                    title="Mark all as read"
+                  >
+                    <CheckCheck className="w-3 h-3" /> Read all
+                  </button>
+                )}
+                <button onClick={() => setOpen(false)} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 scrollbar-hide">
+              {notifications.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  No notifications yet
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      if (!n.is_read) markAsRead(n.id);
+                    }}
+                    className={`w-full text-left p-3 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
+                      !n.is_read ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <div className="mt-0.5 flex-shrink-0">{typeIcons[n.type] || typeIcons.info}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-sm truncate ${!n.is_read ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
+                          {n.title}
+                        </p>
+                        {!n.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <Link
+              to="/notifications"
+              onClick={() => setOpen(false)}
+              className="block text-center text-xs text-primary font-medium py-2.5 border-t border-border hover:bg-secondary/50 transition-colors"
+            >
+              View all notifications →
+            </Link>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={triggerRef}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((prev) => !prev)}
         className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded relative"
         data-focusable="true"
         title="Notifications"
@@ -52,78 +164,7 @@ export function NotificationBell() {
           </span>
         )}
       </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-0 sm:items-start sm:justify-end sm:inset-auto sm:absolute sm:right-0 sm:top-full sm:mt-2">
-          {/* Backdrop on mobile */}
-          <div className="fixed inset-0 bg-background/50 sm:hidden" onClick={() => setOpen(false)} />
-          <div className="relative w-[90vw] sm:w-80 max-h-[70vh] sm:max-h-96 bg-card border border-border rounded-xl shadow-xl overflow-hidden flex flex-col z-10">
-          {/* Header */}
-          <div className="flex items-center justify-between p-3 border-b border-border">
-            <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
-            <div className="flex gap-1">
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllAsRead}
-                  className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
-                  title="Mark all as read"
-                >
-                  <CheckCheck className="w-3 h-3" /> Read all
-                </button>
-              )}
-              <button onClick={() => setOpen(false)} className="p-1 text-muted-foreground hover:text-foreground">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* List */}
-          <div className="overflow-y-auto flex-1 scrollbar-hide">
-            {notifications.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                No notifications yet
-              </div>
-            ) : (
-              notifications.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => { if (!n.is_read) markAsRead(n.id); }}
-                  className={`w-full text-left p-3 border-b border-border/50 hover:bg-secondary/50 transition-colors flex gap-3 ${
-                    !n.is_read ? 'bg-primary/5' : ''
-                  }`}
-                >
-                  <div className="mt-0.5 flex-shrink-0">
-                    {typeIcons[n.type] || typeIcons.info}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm truncate ${!n.is_read ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
-                        {n.title}
-                      </p>
-                      {!n.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                    <p className="text-[10px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-
-          {/* Footer link */}
-          <Link
-            to="/notifications"
-            onClick={() => setOpen(false)}
-            className="block text-center text-xs text-primary font-medium py-2.5 border-t border-border hover:bg-secondary/50 transition-colors"
-          >
-            View all notifications →
-          </Link>
-          </div>
-        </div>
-      )}
+      {panel}
     </div>
   );
 }
