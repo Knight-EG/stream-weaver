@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSpatialNavigation } from '@/hooks/useSpatialNavigation';
 import { usePlaylist } from '@/hooks/usePlaylist';
 import { useAccessGuard } from '@/hooks/useAccessGuard';
@@ -6,7 +6,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
 import { isTVDevice } from '@/lib/tv-detect';
 import { TVLayout } from '@/components/tv/TVLayout';
-import { PlaylistSetup } from '@/components/player/PlaylistSetup';
+import { PlaylistManager, getSavedPlaylists, getActivePlaylistId, setActivePlaylistId } from '@/components/player/PlaylistManager';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
@@ -29,11 +29,28 @@ export default function Index() {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [section, setSection] = useState<Section>('home');
+  const [showPlaylistManager, setShowPlaylistManager] = useState(false);
   const [movieSearch, setMovieSearch] = useState('');
   const [seriesSearch, setSeriesSearch] = useState('');
   const [movieCategory, setMovieCategory] = useState<string | null>(null);
   const [seriesCategory, setSeriesCategory] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [autoLoaded, setAutoLoaded] = useState(false);
+
+  // Auto-load saved playlist on mount
+  useEffect(() => {
+    if (autoLoaded || playlist.channels.length > 0 || playlist.loading) return;
+    const saved = getSavedPlaylists();
+    const aid = getActivePlaylistId();
+    const active = saved.find(p => p.id === aid) || saved[0];
+    if (active) {
+      setAutoLoaded(true);
+      setActivePlaylistId(active.id);
+      playlist.loadPlaylist(active.source);
+    } else {
+      setAutoLoaded(true);
+    }
+  }, [autoLoaded, playlist.channels.length, playlist.loading]);
 
   const handleSelectChannel = useCallback((ch: Channel) => { setActiveChannel(ch); }, []);
 
@@ -135,8 +152,19 @@ export default function Index() {
       </div>
     );
   }
-
-  if (playlist.channels.length === 0) return <PlaylistSetup onSubmit={playlist.loadPlaylist} loading={playlist.loading} error={playlist.error} />;
+  if (showPlaylistManager || (playlist.channels.length === 0 && !playlist.loading && autoLoaded)) {
+    return (
+      <PlaylistManager
+        onLoadPlaylist={(source) => {
+          playlist.loadPlaylist(source);
+          setShowPlaylistManager(false);
+        }}
+        loading={playlist.loading}
+        error={playlist.error}
+        currentChannelCount={playlist.channels.length}
+      />
+    );
+  }
 
   // TV Mode - Netflix/Shahid style interface
   if (isTVDevice()) {
@@ -227,6 +255,19 @@ export default function Index() {
                 </div>
               </div>
             )}
+
+            {/* Playlist Switcher */}
+            <div className="p-2 border-t border-border">
+              <button
+                onClick={() => setShowPlaylistManager(true)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 tv-focusable"
+                data-focusable="true"
+              >
+                <List className="w-4 h-4" />
+                <span className="flex-1 text-start">Playlists</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{getSavedPlaylists().length}</span>
+              </button>
+            </div>
 
             {/* Quick Links */}
             <div className="p-2 border-t border-border space-y-1 mt-auto">

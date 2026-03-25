@@ -21,25 +21,6 @@ interface PlaylistState {
 }
 
 const FAVORITES_KEY = 'iptv_favorites';
-const SAVED_SOURCE_KEY = 'iptv_saved_source';
-
-function saveSource(source: PlaylistSource) {
-  try {
-    if (source.type === 'file') return; // Don't save file content (too large)
-    localStorage.setItem(SAVED_SOURCE_KEY, JSON.stringify(source));
-  } catch {}
-}
-
-function loadSavedSource(): PlaylistSource | null {
-  try {
-    const stored = localStorage.getItem(SAVED_SOURCE_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch { return null; }
-}
-
-export function clearSavedSource() {
-  localStorage.removeItem(SAVED_SOURCE_KEY);
-}
 
 function loadLocalFavorites(): Set<string> {
   try {
@@ -60,13 +41,7 @@ export function usePlaylist() {
     categoryIndex: new Map(),
   });
 
-  // Auto-load saved playlist source on mount
-  useEffect(() => {
-    const saved = loadSavedSource();
-    if (saved && state.channels.length === 0) {
-      loadPlaylist(saved);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-load is now handled by PlaylistManager
 
   // Load favorites from DB on mount
   useEffect(() => {
@@ -166,8 +141,6 @@ export function usePlaylist() {
       }
 
       setCachedPlaylist(cacheKey, result);
-      // Save the source so user doesn't have to re-enter it
-      saveSource(source);
 
       const categoryIndex = buildCategoryIndex(result.channels);
       setState(s => ({
