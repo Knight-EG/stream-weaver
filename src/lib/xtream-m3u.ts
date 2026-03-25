@@ -6,63 +6,51 @@ function normalizeServer(server: string): string {
   return base;
 }
 
-function buildApiUrl(base: string, username: string, password: string, action: string): string {
-  return `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=${action}`;
+/**
+ * Extract hostname (without port) from the server URL.
+ */
+function extractHostname(server: string): string {
+  try {
+    const url = new URL(normalizeServer(server));
+    return url.hostname;
+  } catch {
+    return server.replace(/^https?:\/\//i, '').replace(/:\d+$/, '').replace(/\/.*$/, '');
+  }
 }
 
-export async function downloadXtreamM3UFile(creds: XtreamCredentials): Promise<void> {
+/**
+ * Build multiple possible M3U download URLs since different Xtream panels
+ * serve get.php on different ports (API port vs streaming port 80).
+ */
+export function buildM3uDownloadUrls(creds: XtreamCredentials): string[] {
   const base = normalizeServer(creds.server);
+  const hostname = extractHostname(creds.server);
+  const u = creds.username;
+  const p = creds.password;
+  const params = `username=${u}&password=${p}&type=m3u_plus&output=ts`;
 
-  const [categoriesRes, streamsRes] = await Promise.all([
-    fetch(buildApiUrl(base, creds.username, creds.password, 'get_live_categories'), { signal: AbortSignal.timeout(15000) }),
-    fetch(buildApiUrl(base, creds.username, creds.password, 'get_live_streams'), { signal: AbortSignal.timeout(20000) }),
-  ]);
+  const urls = new Set<string>();
 
-  if (!categoriesRes.ok || !streamsRes.ok) {
-    throw new Error(`فشل الاتصال بالمزود (${categoriesRes.status}/${streamsRes.status})`);
-  }
+  // 1. Standard port 80 (most common for get.php)
+  urls.add(`http://${hostname}/get.php?${params}`);
 
-  const categories = await categoriesRes.json();
-  const streams = await streamsRes.json();
+  // 2. Same server URL the user entered (with their port)
+  urls.add(`${base}/get.php?${params}`);
 
-  if (!Array.isArray(streams)) {
-    throw new Error('استجابة المزود غير صالحة');
-  }
+  // 3. Port 25461 (common Xtream streaming port)  
+  urls.add(`http://${hostname}:25461/get.php?${params}`);
 
-  const categoryMap = new Map<string, string>(
-    Array.isArray(categories)
-      ? categories.map((category: any) => [String(category.category_id), String(category.category_name || 'Live')])
-      : [],
-  );
+  return Array.from(urls);
+}
 
-  const lines = ['#EXTM3U'];
-
-  for (const stream of streams) {
-    const streamId = stream?.stream_id;
-    const name = String(stream?.name || `Channel ${streamId || ''}`).trim();
-    if (!streamId || !name) continue;
-
-    const logo = stream?.stream_icon ? ` tvg-logo="${String(stream.stream_icon).replace(/"/g, '&quot;')}"` : '';
-    const tvgId = stream?.epg_channel_id ? ` tvg-id="${String(stream.epg_channel_id).replace(/"/g, '&quot;')}"` : '';
-    const groupTitle = categoryMap.get(String(stream?.category_id)) || 'Live';
-    const safeGroup = groupTitle.replace(/"/g, '&quot;');
-    const streamUrl = `${base}/live/${encodeURIComponent(creds.username)}/${encodeURIComponent(creds.password)}/${streamId}.ts`;
-
-    lines.push(`#EXTINF:-1${tvgId}${logo} group-title="${safeGroup}",${name}`);
-    lines.push(streamUrl);
-  }
-
-  if (lines.length === 1) {
-    throw new Error('المزود لم يرجع أي قنوات');
-  }
-
-  const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = 'playlist.m3u';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+/**
+ * Open the M3U download URL in a new tab.
+ * We can't use fetch() because the app runs on HTTPS and Xtream servers run on HTTP
+ * (Mixed Content is blocked by browsers).
+ * Instead we open the URL directly - the browser handles it as a navigation/download.
+ */
+export function openM3uDownload(creds: XtreamCredentials, urlIndex = 0): void {
+  const urls = buildM3uDownloadUrls(creds);
+  const url = urls[urlIndex] || urls[0];
+  window.open(url, '_blank');
 }
