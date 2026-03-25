@@ -562,6 +562,45 @@ export type Database = {
         }
         Relationships: []
       }
+      tv_activations: {
+        Row: {
+          activated_at: string | null
+          activation_code: string
+          created_at: string
+          device_name: string | null
+          id: string
+          mac_address: string
+          playlist_source: Json | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          activation_code: string
+          created_at?: string
+          device_name?: string | null
+          id?: string
+          mac_address: string
+          playlist_source?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          activation_code?: string
+          created_at?: string
+          device_name?: string | null
+          id?: string
+          mac_address?: string
+          playlist_source?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string

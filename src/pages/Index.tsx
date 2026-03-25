@@ -6,6 +6,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
 import { isTVDevice } from '@/lib/tv-detect';
 import { TVLayout } from '@/components/tv/TVLayout';
+import { TVActivationScreen } from '@/components/tv/TVActivationScreen';
 import { type XtreamAccountInfo, fetchXtreamAccountInfo } from '@/lib/xtream';
 import { PlaylistManager, getSavedPlaylists, getActivePlaylistId, setActivePlaylistId } from '@/components/player/PlaylistManager';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
@@ -31,6 +32,7 @@ export default function Index() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [section, setSection] = useState<Section>('home');
   const [showPlaylistManager, setShowPlaylistManager] = useState(false);
+  const [tvManualEntry, setTvManualEntry] = useState(false);
   const [movieSearch, setMovieSearch] = useState('');
   const [seriesSearch, setSeriesSearch] = useState('');
   const [movieCategory, setMovieCategory] = useState<string | null>(null);
@@ -180,8 +182,42 @@ export default function Index() {
     );
   }
 
-  // TV Mode - Netflix/Shahid style interface
+  // TV Mode - show activation screen if no channels, otherwise show TV layout
   if (isTVDevice()) {
+    if (playlist.channels.length === 0 && !playlist.loading && autoLoaded && !tvManualEntry) {
+      return (
+        <TVActivationScreen
+          onActivated={(source) => {
+            playlist.loadPlaylist(source);
+            if (source.type === 'xtream') {
+              fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+            }
+          }}
+          onManualEntry={() => setTvManualEntry(true)}
+        />
+      );
+    }
+    if (tvManualEntry && playlist.channels.length === 0 && !playlist.loading) {
+      return (
+        <PlaylistManager
+          onLoadPlaylist={async (source) => {
+            setActiveChannel(null);
+            const success = await playlist.loadPlaylist(source);
+            if (!success) return false;
+            setTvManualEntry(false);
+            if (source.type === 'xtream') {
+              fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+            } else {
+              setXtreamAccount(null);
+            }
+            return true;
+          }}
+          loading={playlist.loading}
+          error={playlist.error}
+          currentChannelCount={playlist.channels.length}
+        />
+      );
+    }
     return <TVLayout channels={playlist.channels} favorites={playlist.favorites} onToggleFavorite={playlist.toggleFavorite} />;
   }
 

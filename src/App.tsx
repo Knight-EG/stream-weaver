@@ -19,6 +19,7 @@ import Subscription from "./pages/Subscription.tsx";
 import ResellerPanel from "./pages/ResellerPanel.tsx";
 import Movies from "./pages/Movies.tsx";
 import Series from "./pages/Series.tsx";
+import Activate from "./pages/Activate.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="/reseller" element={<ProtectedRoute><ResellerPanel /></ProtectedRoute>} />
               <Route path="/movies" element={<ProtectedRoute><Movies /></ProtectedRoute>} />
               <Route path="/series" element={<ProtectedRoute><Series /></ProtectedRoute>} />
+              <Route path="/activate" element={<Activate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
