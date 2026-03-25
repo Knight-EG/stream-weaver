@@ -218,7 +218,7 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
             {/* Favorites Row */}
             {favoriteChannels.length > 0 && (
               <TVRow
-                title={`⭐ ${t('favorites')}`}
+                title={`⭐ ${t('playerFavorites')}`}
                 channels={favoriteChannels}
                 onSelect={setActiveChannel}
               />
