@@ -398,7 +398,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
             <div className="flex gap-2">
               {mode !== 'file' && (
                 <button
-                  onClick={() => handleAdd()}
+                  onClick={() => { void handleAdd(); }}
                   disabled={loading}
                   className="flex-1 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm tv-focusable disabled:opacity-50 flex items-center justify-center gap-2"
                   data-focusable="true"
