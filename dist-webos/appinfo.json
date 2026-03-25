@@ -1,0 +1,16 @@
+{
+  "id": "com.iptv.player",
+  "version": "1.0.0",
+  "vendor": "IPTV Player",
+  "type": "web",
+  "main": "index.html",
+  "title": "IPTV Player",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgImage": "bgImage.png",
+  "resolution": "1920x1080",
+  "iconColor": "#0EA5E9",
+  "splashBackground": "#0d1117",
+  "disableBackHistoryAPI": false,
+  "handlesRelaunch": false
+}
