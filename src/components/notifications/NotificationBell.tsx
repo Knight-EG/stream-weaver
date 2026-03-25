@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bell, Check, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, Clock, X } from 'lucide-react';
 import { useNotifications, type Notification } from '@/hooks/useNotifications';
 
 const typeIcons: Record<string, React.ReactNode> = {
