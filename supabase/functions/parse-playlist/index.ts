@@ -14,6 +14,38 @@ interface Channel {
   type: 'live' | 'movie' | 'series';
 }
 
+const upstreamHeaders = {
+  'Accept': 'application/json, text/plain, */*',
+  'User-Agent': 'Mozilla/5.0 (compatible; LovablePlaylistParser/1.0; +https://lovable.dev)',
+};
+
+function looksLikeHtml(content: string): boolean {
+  const trimmed = content.trim().toLowerCase();
+  return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.startsWith('<body') || trimmed.startsWith('<');
+}
+
+function safeJsonParse<T>(content: string): T {
+  try {
+    return JSON.parse(content) as T;
+  } catch {
+    const snippet = content.slice(0, 160).replace(/\s+/g, ' ').trim();
+    if (looksLikeHtml(content)) {
+      throw new Error(`Xtream provider returned HTML instead of JSON. It may be blocking remote requests or the server URL/credentials are invalid. Response preview: ${snippet}`);
+    }
+    throw new Error(`Xtream provider returned invalid JSON. Response preview: ${snippet}`);
+  }
+}
+
+async function fetchUpstreamText(url: string): Promise<{ response: Response; text: string }> {
+  const response = await fetch(url, {
+    headers: upstreamHeaders,
+    redirect: 'follow',
+  });
+
+  const text = await response.text();
+  return { response, text };
+}
+
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
   const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
   const channels: Channel[] = [];
@@ -111,11 +143,25 @@ Deno.serve(async (req) => {
       }
       const base = server.replace(/\/$/, '');
       const [catsRes, streamsRes] = await Promise.all([
-        fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`),
-        fetch(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`),
+        fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`),
+        fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`),
       ]);
-      const categories = await catsRes.json();
-      const streams = await streamsRes.json();
+
+      if (!catsRes.response.ok) {
+        throw new Error(`Failed to fetch Xtream categories (${catsRes.response.status}). ${looksLikeHtml(catsRes.text) ? 'The provider returned HTML instead of JSON.' : 'Unexpected upstream response.'}`);
+      }
+
+      if (!streamsRes.response.ok) {
+        throw new Error(`Failed to fetch Xtream streams (${streamsRes.response.status}). ${looksLikeHtml(streamsRes.text) ? 'The provider returned HTML instead of JSON.' : 'Unexpected upstream response.'}`);
+      }
+
+      const categories = safeJsonParse<any[]>(catsRes.text);
+      const streams = safeJsonParse<any[]>(streamsRes.text);
+
+      if (!Array.isArray(categories) || !Array.isArray(streams)) {
+        throw new Error('Xtream provider returned an unexpected payload shape.');
+      }
+
       const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
 
       const channels: Channel[] = streams.map((s: any) => ({
@@ -148,6 +194,8 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('parse-playlist failed:', message);
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
