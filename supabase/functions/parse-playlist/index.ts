@@ -141,7 +141,10 @@ Deno.serve(async (req) => {
       if (!server || !username || !password) {
         return new Response(JSON.stringify({ error: 'Missing xtream credentials' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      const base = server.replace(/\/$/, '');
+      let base = server.replace(/\/$/, '');
+      if (!/^https?:\/\//i.test(base)) {
+        base = 'http://' + base;
+      }
       const [catsRes, streamsRes] = await Promise.all([
         fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`),
         fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`),
