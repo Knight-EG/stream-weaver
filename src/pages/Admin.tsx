@@ -49,6 +49,7 @@ export default function Admin() {
   }
 
   async function toggleDevice(deviceId: string, isActive: boolean) { await supabase.from('devices').update({ is_active: !isActive }).eq('id', deviceId); loadData(); }
+  async function updateMaxDevices(userId: string, newMax: number) { await supabase.from('profiles').update({ max_devices: newMax }).eq('user_id', userId); setProfiles(prev => prev.map(p => p.user_id === userId ? { ...p, max_devices: newMax } : p)); }
   async function deleteDevice(deviceId: string) { await supabase.from('devices').update({ is_active: false }).eq('id', deviceId); loadData(); }
   async function suspendSubscription(subId: string) { await supabase.from('subscriptions').update({ status: 'suspended' } as any).eq('id', subId); loadData(); }
   async function expireSubscription(subId: string) { await supabase.from('subscriptions').update({ status: 'expired' } as any).eq('id', subId); loadData(); }
@@ -149,7 +150,13 @@ export default function Admin() {
                 <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/50">
                   <td className="p-3 text-foreground font-medium">{p.display_name || 'N/A'}</td>
                   <td className="p-3 text-muted-foreground hidden sm:table-cell">{p.email}</td>
-                  <td className="p-3 text-muted-foreground">{p.max_devices}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => updateMaxDevices(p.user_id, Math.max(1, (p.max_devices || 3) - 1))} className="w-6 h-6 rounded bg-muted hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs font-bold tv-focusable" data-focusable="true">-</button>
+                      <span className="w-8 text-center text-foreground font-medium">{p.max_devices || 3}</span>
+                      <button onClick={() => updateMaxDevices(p.user_id, Math.min(10, (p.max_devices || 3) + 1))} className="w-6 h-6 rounded bg-muted hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs font-bold tv-focusable" data-focusable="true">+</button>
+                    </div>
+                  </td>
                   <td className="p-3 text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}
