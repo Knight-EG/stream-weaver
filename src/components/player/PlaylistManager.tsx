@@ -251,20 +251,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {activeId !== playlist.id && (
-                      <button
-                        onClick={() => handleSwitch(playlist)}
-                        className="p-2 rounded-lg text-primary hover:bg-primary/10 tv-focusable"
-                        data-focusable="true"
-                        title="Switch to this playlist"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
-                    )}
-                    {activeId === playlist.id && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary uppercase">Active</span>
-                    )}
+                  <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleSwitch(playlist)}
+                      className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 tv-focusable flex items-center gap-1.5"
+                      data-focusable="true"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      {activeId === playlist.id ? 'Reload' : 'Connect'}
+                    </button>
                     <button
                       onClick={() => { setEditingId(playlist.id); setEditName(playlist.name); }}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted tv-focusable"
@@ -280,7 +275,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
