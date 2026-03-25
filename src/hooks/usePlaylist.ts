@@ -21,25 +21,6 @@ interface PlaylistState {
 }
 
 const FAVORITES_KEY = 'iptv_favorites';
-const SAVED_SOURCE_KEY = 'iptv_saved_source';
-
-function saveSource(source: PlaylistSource) {
-  try {
-    if (source.type === 'file') return; // Don't save file content (too large)
-    localStorage.setItem(SAVED_SOURCE_KEY, JSON.stringify(source));
-  } catch {}
-}
-
-function loadSavedSource(): PlaylistSource | null {
-  try {
-    const stored = localStorage.getItem(SAVED_SOURCE_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch { return null; }
-}
-
-export function clearSavedSource() {
-  localStorage.removeItem(SAVED_SOURCE_KEY);
-}
 
 function loadLocalFavorites(): Set<string> {
   try {
