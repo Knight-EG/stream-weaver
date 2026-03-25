@@ -116,8 +116,6 @@ async function xtreamFetchWithPortFallback(path: string, server: string): Promis
   
   throw lastError || new Error('All port attempts failed');
 }
-  }
-}
 
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
   const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
