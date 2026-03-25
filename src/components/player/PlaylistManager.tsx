@@ -263,7 +263,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
 
                   <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                     <button
-                      onClick={() => handleSwitch(playlist)}
+                      onClick={() => { void handleSwitch(playlist); }}
                       className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 tv-focusable flex items-center gap-1.5"
                       data-focusable="true"
                     >

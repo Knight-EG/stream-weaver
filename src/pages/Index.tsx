@@ -160,15 +160,18 @@ export default function Index() {
   if (showPlaylistManager || (playlist.channels.length === 0 && !playlist.loading && autoLoaded)) {
     return (
       <PlaylistManager
-        onLoadPlaylist={(source) => {
+        onLoadPlaylist={async (source) => {
           setActiveChannel(null);
-          playlist.loadPlaylist(source);
+          const success = await playlist.loadPlaylist(source);
+          if (!success) return false;
+
           setShowPlaylistManager(false);
           if (source.type === 'xtream') {
             fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
           } else {
             setXtreamAccount(null);
           }
+          return true;
         }}
         loading={playlist.loading}
         error={playlist.error}
