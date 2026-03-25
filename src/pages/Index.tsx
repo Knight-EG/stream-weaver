@@ -11,7 +11,7 @@ import { CategorySidebar } from '@/components/player/CategorySidebar';
 import { SearchBar } from '@/components/player/SearchBar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { Menu, X, Settings, LogOut, User, Loader2, Clock, ShieldCheck, Infinity, CreditCard, Store } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User, Loader2, Clock, ShieldCheck, Infinity, CreditCard, Store, Film, Tv } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
