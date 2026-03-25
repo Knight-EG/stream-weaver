@@ -157,17 +157,17 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
                 />
               </div>
               {server && username && password && (
-                <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    💡 لو الاتصال المباشر فشل، حمّل ملف M3U من الرابط ده (هيستخدم IP جهازك) وارفعه في تبويب "Upload File":
+                <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 space-y-3">
+                  <p className="text-sm text-foreground font-medium">
+                    💡 لو الاتصال المباشر فشل، حمّل ملف M3U وارفعه في تبويب "Upload File"
                   </p>
                   <a
                     href={`${server.trim().replace(/\/$/, '')}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium"
+                    className="w-full py-3 rounded-lg bg-accent text-accent-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                   >
-                    <Download className="w-4 h-4" /> حمّل ملف M3U
+                    <Download className="w-5 h-5" /> تحميل ملف M3U
                   </a>
                 </div>
               )}
