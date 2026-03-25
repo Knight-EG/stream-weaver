@@ -8,6 +8,7 @@ const typeIcons: Record<string, React.ReactNode> = {
   subscription: <CreditCard className="w-4 h-4 text-success" />,
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   error: <AlertTriangle className="w-4 h-4 text-destructive" />,
+  trial: <Clock className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-primary" />,
 };
 
