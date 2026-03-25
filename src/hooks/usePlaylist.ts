@@ -85,63 +85,39 @@ export function usePlaylist() {
       if (source.type === 'file') {
         const { parseM3U } = await import('@/lib/m3u-parser');
         result = parseM3U(source.content);
-      } else {
-      try {
-        const body = source.type === 'm3u'
-          ? { type: 'm3u', url: source.url }
-          : { type: 'xtream', server: source.credentials.server, username: source.credentials.username, password: source.credentials.password };
-
-        const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
-        if (error) throw error;
-
-        if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
-          // For Xtream provider-blocked: try client-side direct connection (user's IP may not be blocked)
-          if (source.type === 'xtream' && data.code === 'PROVIDER_BLOCKED') {
-            console.log('Server blocked by provider, trying direct client-side Xtream API...');
-            try {
-              const { fetchXtreamPlaylist } = await import('@/lib/xtream');
-              result = await fetchXtreamPlaylist(source.credentials);
-            } catch (clientErr) {
-              // If client-side also fails, try M3U format as last resort
-              try {
-                const creds = source.credentials;
-                let base = creds.server.replace(/\/$/, '');
-                // Try HTTPS first (for mixed content safety), fallback to HTTP
-                if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
-                const m3uUrl = `${base}/get.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&type=m3u_plus&output=ts`;
-                const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
-                result = await fetchAndParseM3U(m3uUrl);
-              } catch {
-                throw new Error('تعذر الاتصال بمزود الخدمة. جرب تحميل ملف M3U من المزود ورفعه مباشرة.');
-              }
-            }
-          } else {
-            throw new Error(typeof data.error === 'string' ? data.error : 'Playlist provider request failed');
-          }
-        }
-
-        if (!result!) {
-          result = data as ParsedPlaylist;
-        }
-      } catch (serverErr) {
-        console.warn('Server-side parsing failed, falling back to client:', serverErr);
-
-        // Always try client-side fallback
+      } else if (source.type === 'xtream') {
+        // Xtream: ALWAYS try client-side first (user's IP not blocked)
         try {
-          const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
           const { fetchXtreamPlaylist } = await import('@/lib/xtream');
-          
-          if (source.type === 'm3u') {
-            result = await fetchAndParseM3U(source.url);
-          } else {
-            result = await fetchXtreamPlaylist(source.credentials);
-          }
+          result = await fetchXtreamPlaylist(source.credentials);
         } catch (clientErr) {
-          // Re-throw the original server error with context
-          const msg = serverErr instanceof Error ? serverErr.message : String(serverErr);
-          throw new Error(msg);
+          console.warn('Client-side Xtream failed, trying edge function:', clientErr);
+          // Fallback to edge function
+          try {
+            const { data, error } = await supabase.functions.invoke('parse-playlist', {
+              body: { type: 'xtream', server: source.credentials.server, username: source.credentials.username, password: source.credentials.password },
+            });
+            if (error) throw error;
+            if (data?.ok === false) throw new Error(data.error || 'Provider error');
+            result = data as ParsedPlaylist;
+          } catch (serverErr) {
+            throw new Error('تعذر الاتصال بمزود الخدمة. جرب تحميل ملف M3U من المزود ورفعه مباشرة.');
+          }
         }
-      }
+      } else {
+        // M3U URL: try edge function first, then client
+        try {
+          const { data, error } = await supabase.functions.invoke('parse-playlist', {
+            body: { type: 'm3u', url: source.url },
+          });
+          if (error) throw error;
+          if (data?.ok === false) throw new Error(data.error || 'Failed');
+          result = data as ParsedPlaylist;
+        } catch (serverErr) {
+          console.warn('Server M3U failed, trying client:', serverErr);
+          const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+          result = await fetchAndParseM3U(source.url);
+        }
       }
 
       setCachedPlaylist(cacheKey, result);
