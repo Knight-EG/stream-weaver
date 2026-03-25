@@ -39,26 +39,23 @@ export default function Index() {
   const [autoLoaded, setAutoLoaded] = useState(false);
   const [xtreamAccount, setXtreamAccount] = useState<XtreamAccountInfo | null>(null);
 
-  // Auto-load saved playlist on mount
+  // Auto-load saved playlist on mount (only once)
   useEffect(() => {
-    if (autoLoaded || playlist.channels.length > 0 || playlist.loading) return;
+    if (autoLoaded) return;
+    setAutoLoaded(true);
     const saved = getSavedPlaylists();
     const aid = getActivePlaylistId();
     const active = saved.find(p => p.id === aid) || saved[0];
     if (active) {
-      setAutoLoaded(true);
       setActivePlaylistId(active.id);
       playlist.loadPlaylist(active.source);
-      // Fetch xtream account info if applicable
       if (active.source.type === 'xtream') {
         fetchXtreamAccountInfo(active.source.credentials).then(setXtreamAccount);
       } else {
         setXtreamAccount(null);
       }
-    } else {
-      setAutoLoaded(true);
     }
-  }, [autoLoaded, playlist.channels.length, playlist.loading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectChannel = useCallback((ch: Channel) => { setActiveChannel(ch); }, []);
 

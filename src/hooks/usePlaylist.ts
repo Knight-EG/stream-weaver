@@ -139,14 +139,16 @@ export function usePlaylist() {
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load playlist';
-      setState(s => ({
-        ...s,
-        loading: false,
-        error: message,
-      }));
-      toast.error('فشل تحميل قائمة التشغيل', {
-        description: message,
-        duration: 9000,
+      setState(s => {
+        // Only show toast if we don't already have the same error (prevent spam)
+        if (s.error !== message) {
+          toast.error('فشل تحميل قائمة التشغيل', {
+            description: message.length > 120 ? message.slice(0, 120) + '…' : message,
+            duration: 8000,
+            id: 'playlist-load-error', // deduplicate: same ID = same toast, no stacking
+          });
+        }
+        return { ...s, loading: false, error: message };
       });
     }
   }, []);
