@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function Index() {
   useSpatialNavigation();
+  const { user, signOut } = useAuth();
 
   const playlist = usePlaylist();
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
