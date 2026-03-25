@@ -134,57 +134,12 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
           <div className="flex-1 flex items-center justify-center px-12 pb-12">
             <div className="grid grid-cols-3 gap-6 w-full max-w-5xl" data-focus-group="home-grid">
 
-              {/* Live TV */}
-              <HomeCard
-                icon={<Radio className="w-16 h-16" />}
-                label={t('dashboardLive')}
-                count={liveChannels.length}
-                color="from-blue-600 to-blue-800"
-                onClick={() => navigateTo('live', 'live')}
-              />
-
-              {/* Movies */}
-              <HomeCard
-                icon={<Film className="w-16 h-16" />}
-                label={t('moviesTitle')}
-                count={movieChannels.length}
-                color="from-purple-600 to-purple-800"
-                onClick={() => navigateTo('movies', 'movie')}
-              />
-
-              {/* Series */}
-              <HomeCard
-                icon={<Tv className="w-16 h-16" />}
-                label={t('seriesTitle')}
-                count={seriesChannels.length}
-                color="from-emerald-600 to-emerald-800"
-                onClick={() => navigateTo('series', 'series')}
-              />
-
-              {/* Favorites */}
-              <HomeCard
-                icon={<Heart className="w-16 h-16" />}
-                label={t('playerFavorites')}
-                count={favoriteChannels.length}
-                color="from-rose-600 to-rose-800"
-                onClick={() => navigateTo('favorites')}
-              />
-
-              {/* Search */}
-              <HomeCard
-                icon={<Search className="w-16 h-16" />}
-                label={t('search')}
-                color="from-amber-600 to-amber-800"
-                onClick={() => { navigateTo('search'); setTimeout(() => searchInputRef.current?.focus(), 200); }}
-              />
-
-              {/* Settings */}
-              <HomeCard
-                icon={<Settings className="w-16 h-16" />}
-                label={t('settings')}
-                color="from-slate-600 to-slate-800"
-                onClick={() => navigateTo('settings')}
-              />
+              <HomeCard image={tileLive} label={t('dashboardLive')} count={liveChannels.length} onClick={() => navigateTo('live', 'live')} />
+              <HomeCard image={tileMovies} label={t('moviesTitle')} count={movieChannels.length} onClick={() => navigateTo('movies', 'movie')} />
+              <HomeCard image={tileSeries} label={t('seriesTitle')} count={seriesChannels.length} onClick={() => navigateTo('series', 'series')} />
+              <HomeCard image={tileFavorites} label={t('playerFavorites')} count={favoriteChannels.length} onClick={() => navigateTo('favorites')} />
+              <HomeCard image={tileSearch} label={t('search')} onClick={() => { navigateTo('search'); setTimeout(() => searchInputRef.current?.focus(), 200); }} />
+              <HomeCard image={tileSettings} label={t('settings')} onClick={() => navigateTo('settings')} />
             </div>
           </div>
 
