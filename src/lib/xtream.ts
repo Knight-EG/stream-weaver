@@ -59,7 +59,10 @@ function needsProxy(): boolean {
 }
 
 const CORS_PROXIES = [
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => {
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+    return `https://${projectId}.supabase.co/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+  },
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
 
