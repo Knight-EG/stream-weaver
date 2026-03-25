@@ -216,11 +216,11 @@ async function applyTempBan(userId: string, hours: number) {
   } catch {}
 }
 
-async function sendSecurityNotification(userId: string, type: string, strikeCount: number) {
+async function sendSecurityNotification(userId: string, type: string, strikeCount: number, maxDevices: number = 3) {
   const messages: Record<string, { title: string; message: string }> = {
     multiple_devices: {
       title: '⚠️ Multiple Devices Detected',
-      message: `We detected ${strikeCount > 1 ? 'repeated ' : ''}access from multiple devices. Only 1 device is allowed per account. Strike ${strikeCount}/${STRIKE_THRESHOLD_BAN}.`,
+      message: `We detected ${strikeCount > 1 ? 'repeated ' : ''}access from multiple devices. Only ${maxDevices} device(s) allowed per account. Strike ${strikeCount}/${STRIKE_THRESHOLD_BAN}.`,
     },
     device_mismatch: {
       title: '🔒 Unregistered Device Access',
