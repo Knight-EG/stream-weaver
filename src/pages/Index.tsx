@@ -35,6 +35,7 @@ export default function Index() {
   const [movieCategory, setMovieCategory] = useState<string | null>(null);
   const [seriesCategory, setSeriesCategory] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [autoLoaded, setAutoLoaded] = useState(false);
 
   const handleSelectChannel = useCallback((ch: Channel) => { setActiveChannel(ch); }, []);
 
