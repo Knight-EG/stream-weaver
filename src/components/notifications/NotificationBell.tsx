@@ -24,7 +24,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export const NotificationBell = memo(function NotificationBell() {
+function NotificationBellInner() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -168,4 +168,6 @@ export const NotificationBell = memo(function NotificationBell() {
       {panel}
     </div>
   );
-});
+}
+
+export const NotificationBell = memo(NotificationBellInner);
