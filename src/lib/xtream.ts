@@ -81,21 +81,36 @@ function proxyUrl(url: string): string {
  * On TV/HTTP — connects directly without any proxy.
  */
 async function directFetch(url: string, timeoutMs = 20000): Promise<any> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const finalUrl = proxyUrl(url);
+  const res = await fetch(finalUrl, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-/** Try multiple base URLs until one works */
+/** Try multiple base URLs until one works, with proxy fallback on HTTPS */
 async function fetchWithFallback(path: string, server: string): Promise<any> {
   const bases = getAlternativeBases(server);
   let lastError: Error | null = null;
+
+  // Try each base with default proxy strategy
   for (const base of bases) {
     try {
       return await directFetch(`${base}${path}`);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       console.warn(`Failed ${base}${path}:`, lastError.message);
+    }
+  }
+
+  // If on HTTPS and first proxy failed, try second proxy
+  if (needsProxy() && CORS_PROXIES.length > 1) {
+    for (const base of bases) {
+      try {
+        const url = CORS_PROXIES[1](`${base}${path}`);
+        const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+        if (!res.ok) continue;
+        return await res.json();
+      } catch { /* try next */ }
     }
   }
   throw lastError || new Error('All connection attempts failed');
