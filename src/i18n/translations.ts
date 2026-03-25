@@ -409,6 +409,8 @@ const ar: TranslationKeys = {
   accessManageDevices: 'إدارة الأجهزة',
   accessTrialRemaining: 'يوم متبقي',
   accessActivateMessage: 'تواصل مع المزود لتفعيل اشتراكك. بمجرد التفعيل، سيعمل التطبيق فوراً.',
+  accessAccountSuspended: 'الحساب موقوف مؤقتاً',
+  accessBanExpires: 'سيتم استعادة الوصول في',
   
   settingsTitle: 'الإعدادات',
   settingsProfile: 'الملف الشخصي',
