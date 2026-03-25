@@ -7,6 +7,7 @@ import type { Channel } from '@/lib/m3u-parser';
 import { isTVDevice } from '@/lib/tv-detect';
 import { TVLayout } from '@/components/tv/TVLayout';
 import { type XtreamAccountInfo, fetchXtreamAccountInfo } from '@/lib/xtream';
+import { PlaylistManager, getSavedPlaylists, getActivePlaylistId, setActivePlaylistId } from '@/components/player/PlaylistManager';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
