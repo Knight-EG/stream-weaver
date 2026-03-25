@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette } from 'lucide-react';
+import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette, Infinity, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhiteLabelSettings } from '@/components/admin/WhiteLabelSettings';
 import { TrialSettings } from '@/components/admin/TrialSettings';
