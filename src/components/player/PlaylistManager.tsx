@@ -34,7 +34,7 @@ export function setActivePlaylistId(id: string) {
 }
 
 interface PlaylistManagerProps {
-  onLoadPlaylist: (source: PlaylistSource) => void;
+  onLoadPlaylist: (source: PlaylistSource) => Promise<boolean>;
   onPlaylistActivated?: (playlist: SavedPlaylist) => void;
   loading: boolean;
   error: string | null;
@@ -87,7 +87,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     // Auto-load is handled by Index.tsx, skip here to avoid duplicate calls
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleAdd = (source?: PlaylistSource) => {
+  const handleAdd = async (source?: PlaylistSource) => {
     const finalSource = source || (
       mode === 'm3u' && m3uUrl.trim()
         ? { type: 'm3u' as const, url: m3uUrl.trim() }
@@ -97,6 +97,12 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     );
 
     if (!finalSource) return;
+
+    const success = await onLoadPlaylist(finalSource);
+    if (!success) {
+      setShowAddForm(true);
+      return;
+    }
 
     const name = playlistName.trim() || (
       finalSource.type === 'xtream' ? `Xtream - ${finalSource.credentials.server.replace(/https?:\/\//, '')}` :
@@ -115,7 +121,6 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     setPlaylists(updated);
     savePlaylistList(updated);
     setActivePlaylistId(newPlaylist.id);
-    onLoadPlaylist(finalSource);
     onPlaylistActivated?.(newPlaylist);
 
     // Reset form
@@ -136,14 +141,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     reader.onload = () => {
       const content = reader.result as string;
       const source: PlaylistSource = { type: 'file', content };
-      handleAdd(source);
+      void handleAdd(source);
     };
     reader.readAsText(file);
   };
 
-  const handleSwitch = (playlist: SavedPlaylist) => {
+  const handleSwitch = async (playlist: SavedPlaylist) => {
+    const success = await onLoadPlaylist(playlist.source);
+    if (!success) return;
     setActivePlaylistId(playlist.id);
-    onLoadPlaylist(playlist.source);
     onPlaylistActivated?.(playlist);
   };
 
