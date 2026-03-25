@@ -55,7 +55,6 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fileName, setFileName] = useState('');
-  const [downloadingM3u, setDownloadingM3u] = useState(false);
 
   const activeId = getActivePlaylistId();
 
