@@ -171,6 +171,17 @@ type TranslationKeys = {
   couponActive: string;
   couponExpired: string;
   
+  // Movies & Series
+  moviesTitle: string;
+  moviesSearchPlaceholder: string;
+  moviesEmpty: string;
+  seriesTitle: string;
+  seriesSearchPlaceholder: string;
+  seriesEmpty: string;
+  allCategories: string;
+  sortByName: string;
+  sortByCategory: string;
+  
   // Time
   timeJustNow: string;
   timeMinAgo: string;
