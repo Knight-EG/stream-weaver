@@ -287,6 +287,9 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* Branding Tab */}
+      {tab === 'branding' && <WhiteLabelSettings />}
     </div>
   );
 }
