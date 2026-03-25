@@ -5,6 +5,12 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Channel } from '@/lib/m3u-parser';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { Radio, Film, Tv, Search, Settings, LogOut, Play, Star, X, ArrowLeft, User, Clock, Heart } from 'lucide-react';
+import tileLive from '@/assets/tv-tile-live.jpg';
+import tileMovies from '@/assets/tv-tile-movies.jpg';
+import tileSeries from '@/assets/tv-tile-series.jpg';
+import tileFavorites from '@/assets/tv-tile-favorites.jpg';
+import tileSearch from '@/assets/tv-tile-search.jpg';
+import tileSettings from '@/assets/tv-tile-settings.jpg';
 
 interface TVLayoutProps {
   channels: Channel[];
@@ -128,57 +134,12 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
           <div className="flex-1 flex items-center justify-center px-12 pb-12">
             <div className="grid grid-cols-3 gap-6 w-full max-w-5xl" data-focus-group="home-grid">
 
-              {/* Live TV */}
-              <HomeCard
-                icon={<Radio className="w-16 h-16" />}
-                label={t('dashboardLive')}
-                count={liveChannels.length}
-                color="from-blue-600 to-blue-800"
-                onClick={() => navigateTo('live', 'live')}
-              />
-
-              {/* Movies */}
-              <HomeCard
-                icon={<Film className="w-16 h-16" />}
-                label={t('moviesTitle')}
-                count={movieChannels.length}
-                color="from-purple-600 to-purple-800"
-                onClick={() => navigateTo('movies', 'movie')}
-              />
-
-              {/* Series */}
-              <HomeCard
-                icon={<Tv className="w-16 h-16" />}
-                label={t('seriesTitle')}
-                count={seriesChannels.length}
-                color="from-emerald-600 to-emerald-800"
-                onClick={() => navigateTo('series', 'series')}
-              />
-
-              {/* Favorites */}
-              <HomeCard
-                icon={<Heart className="w-16 h-16" />}
-                label={t('playerFavorites')}
-                count={favoriteChannels.length}
-                color="from-rose-600 to-rose-800"
-                onClick={() => navigateTo('favorites')}
-              />
-
-              {/* Search */}
-              <HomeCard
-                icon={<Search className="w-16 h-16" />}
-                label={t('search')}
-                color="from-amber-600 to-amber-800"
-                onClick={() => { navigateTo('search'); setTimeout(() => searchInputRef.current?.focus(), 200); }}
-              />
-
-              {/* Settings */}
-              <HomeCard
-                icon={<Settings className="w-16 h-16" />}
-                label={t('settings')}
-                color="from-slate-600 to-slate-800"
-                onClick={() => navigateTo('settings')}
-              />
+              <HomeCard image={tileLive} label={t('dashboardLive')} count={liveChannels.length} onClick={() => navigateTo('live', 'live')} />
+              <HomeCard image={tileMovies} label={t('moviesTitle')} count={movieChannels.length} onClick={() => navigateTo('movies', 'movie')} />
+              <HomeCard image={tileSeries} label={t('seriesTitle')} count={seriesChannels.length} onClick={() => navigateTo('series', 'series')} />
+              <HomeCard image={tileFavorites} label={t('playerFavorites')} count={favoriteChannels.length} onClick={() => navigateTo('favorites')} />
+              <HomeCard image={tileSearch} label={t('search')} onClick={() => { navigateTo('search'); setTimeout(() => searchInputRef.current?.focus(), 200); }} />
+              <HomeCard image={tileSettings} label={t('settings')} onClick={() => navigateTo('settings')} />
             </div>
           </div>
 
@@ -387,30 +348,29 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
 
 /* ═══ Home Card Tile ═══ */
 function HomeCard({
-  icon,
+  image,
   label,
   count,
-  color,
   onClick,
 }: {
-  icon: React.ReactNode;
+  image: string;
   label: string;
   count?: number;
-  color: string;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`relative rounded-3xl bg-gradient-to-br ${color} p-8 flex flex-col items-center justify-center gap-4 min-h-[200px] tv-focusable transition-all duration-300 hover:scale-105 focus:scale-110 focus:ring-4 focus:ring-white/30 focus:shadow-[0_0_40px_rgba(255,255,255,0.2)] group`}
+      className="relative rounded-3xl overflow-hidden min-h-[200px] tv-focusable transition-all duration-300 hover:scale-105 focus:scale-110 focus:ring-4 focus:ring-primary/40 focus:shadow-[0_0_50px_hsl(var(--primary)/0.3)] group"
       data-focusable="true"
     >
-      <div className="text-white/90 group-focus:text-white transition-colors">
-        {icon}
+      <img src={image} alt={label} className="absolute inset-0 w-full h-full object-cover group-focus:scale-110 transition-transform duration-500" loading="lazy" width={640} height={512} />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+      <div className="relative z-10 flex flex-col items-center justify-end h-full p-6 pb-8">
+        <p className="text-2xl font-bold text-white drop-shadow-lg">{label}</p>
       </div>
-      <p className="text-2xl font-bold text-white">{label}</p>
       {count !== undefined && (
-        <span className="absolute top-4 end-4 px-3 py-1 rounded-full bg-black/30 text-sm font-medium text-white/80">
+        <span className="absolute top-4 end-4 z-10 px-3 py-1 rounded-full bg-black/50 backdrop-blur-sm text-sm font-medium text-white/90">
           {count}
         </span>
       )}
