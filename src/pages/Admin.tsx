@@ -67,6 +67,7 @@ export default function Admin() {
     { id: 'devices', label: 'Devices', icon: <Monitor className="w-4 h-4" /> },
     { id: 'subscriptions', label: 'Subs', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'branding', label: 'Brand', icon: <Palette className="w-4 h-4" /> },
   ];
 
   return (
