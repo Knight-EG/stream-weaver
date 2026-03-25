@@ -141,8 +141,6 @@ export function usePlaylist() {
       }
 
       setCachedPlaylist(cacheKey, result);
-      // Save the source so user doesn't have to re-enter it
-      saveSource(source);
 
       const categoryIndex = buildCategoryIndex(result.channels);
       setState(s => ({
