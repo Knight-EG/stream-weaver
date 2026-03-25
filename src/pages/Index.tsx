@@ -29,6 +29,7 @@ export default function Index() {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [section, setSection] = useState<Section>('home');
+  const [showPlaylistManager, setShowPlaylistManager] = useState(false);
   const [movieSearch, setMovieSearch] = useState('');
   const [seriesSearch, setSeriesSearch] = useState('');
   const [movieCategory, setMovieCategory] = useState<string | null>(null);
