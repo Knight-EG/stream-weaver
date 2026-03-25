@@ -213,13 +213,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
 
             <div className="space-y-2">
               {playlists.map(playlist => (
-                <div
+                <button
                   key={playlist.id}
-                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  onClick={() => editingId !== playlist.id && handleSwitch(playlist)}
+                  className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer tv-focusable ${
                     activeId === playlist.id
                       ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
                       : 'border-border bg-card hover:border-muted-foreground/30'
                   }`}
+                  data-focusable="true"
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     activeId === playlist.id ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
