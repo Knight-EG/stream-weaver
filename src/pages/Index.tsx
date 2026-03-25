@@ -233,7 +233,38 @@ export default function Index() {
               </div>
             </div>
 
-            {/* Main Navigation */}
+            {/* Xtream Account Info */}
+            {xtreamAccount && (
+              <div className="mx-3 my-2 p-2.5 rounded-lg bg-muted/50 border border-border space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Provider</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                    xtreamAccount.status === 'Active' ? 'bg-success/20 text-success' :
+                    xtreamAccount.status === 'Expired' ? 'bg-destructive/20 text-destructive' :
+                    'bg-warning/20 text-warning'
+                  }`}>{xtreamAccount.status}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">User</span>
+                  <span className="text-foreground font-medium truncate ms-2">{xtreamAccount.username}</span>
+                </div>
+                {xtreamAccount.expDate && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">Expires</span>
+                    <span className={`font-medium ${new Date(xtreamAccount.expDate) < new Date() ? 'text-destructive' : 'text-foreground'}`}>
+                      {new Date(xtreamAccount.expDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Connections</span>
+                  <span className="text-foreground font-medium">{xtreamAccount.activeCons} / {xtreamAccount.maxConnections}</span>
+                </div>
+                {xtreamAccount.isTrial && (
+                  <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-warning/20 text-warning">Trial Account</span>
+                )}
+              </div>
+            )}
             <nav className="p-2 space-y-1">
               {[
                 { id: 'home' as Section, icon: Home, label: t('dashboardHome'), count: playlist.channels.length },
