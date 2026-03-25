@@ -184,11 +184,10 @@ Deno.serve(async (req) => {
       if (!server || !username || !password) {
         return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
-      const base = buildBase(server);
-      const apiUrl = `${base}/player_api.php?username=${username}&password=${password}`;
+      const apiPath = `/player_api.php?username=${username}&password=${password}`;
 
       try {
-        const data = await xtreamFetch(apiUrl);
+        const data = await xtreamFetchWithPortFallback(apiPath, server);
         const info = data?.user_info || {};
         const toIso = (v: any) => { const ts = parseInt(v, 10); return isNaN(ts) ? null : new Date(ts * 1000).toISOString(); };
 
