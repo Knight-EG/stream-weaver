@@ -345,6 +345,10 @@ const en: TranslationKeys = {
   couponActive: 'Active',
   couponExpired: 'Expired',
   
+  dashboardHome: 'Home',
+  dashboardLive: 'Live TV',
+  dashboardViewAll: 'View All',
+  
   moviesTitle: 'Movies',
   moviesSearchPlaceholder: 'Search movies...',
   moviesEmpty: 'No movies found',
