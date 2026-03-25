@@ -173,6 +173,11 @@ type TranslationKeys = {
   couponActive: string;
   couponExpired: string;
   
+  // Dashboard
+  dashboardHome: string;
+  dashboardLive: string;
+  dashboardViewAll: string;
+  
   // Movies & Series
   moviesTitle: string;
   moviesSearchPlaceholder: string;
