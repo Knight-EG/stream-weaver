@@ -1,5 +1,4 @@
 import type { Channel, ParsedPlaylist } from './m3u-parser';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface XtreamCredentials {
   server: string;
@@ -20,17 +19,36 @@ export interface XtreamAccountInfo {
 
 function buildBase(server: string): string {
   let base = server.trim().replace(/\/$/, '');
-  // Force HTTP always — IPTV providers work on HTTP only
   base = base.replace(/^https:\/\//i, 'http://');
   if (!/^http:\/\//i.test(base)) base = `http://${base}`;
   return base;
 }
 
-function apiUrl(base: string, username: string, password: string, action?: string): string {
+function extractHostname(server: string): string {
+  try {
+    return new URL(buildBase(server)).hostname;
+  } catch {
+    return server.replace(/^https?:\/\//i, '').split(':')[0].split('/')[0];
+  }
+}
+
+/** Build alternative base URLs with common Xtream ports */
+function getAlternativeBases(server: string): string[] {
+  const hostname = extractHostname(server);
+  const mainBase = buildBase(server);
+  const bases = [mainBase];
+  const port80 = `http://${hostname}`;
+  if (!bases.includes(port80)) bases.push(port80);
+  const port25461 = `http://${hostname}:25461`;
+  if (!bases.includes(port25461)) bases.push(port25461);
+  return bases;
+}
+
+function apiPath(username: string, password: string, action?: string): string {
   const params = `username=${username}&password=${password}`;
   return action
-    ? `${base}/player_api.php?${params}&action=${action}`
-    : `${base}/player_api.php?${params}`;
+    ? `/player_api.php?${params}&action=${action}`
+    : `/player_api.php?${params}`;
 }
 
 function toIsoDate(value: unknown): string | null {
@@ -40,27 +58,28 @@ function toIsoDate(value: unknown): string | null {
 }
 
 /**
- * Try fetching from the Xtream server directly from the browser.
- * This works when:
- *  - Both the app and server use HTTP, or
- *  - The server supports HTTPS, or
- *  - The browser doesn't block the request (mixed content)
+ * Direct browser fetch — all Xtream connections happen from the user's device.
+ * No server proxy involved.
  */
-async function browserFetch(url: string, timeoutMs = 15000): Promise<any> {
+async function directFetch(url: string, timeoutMs = 20000): Promise<any> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-/**
- * Try fetching via Edge Function (server-side proxy).
- * This avoids mixed content but may get blocked by some providers (403).
- */
-async function edgeFetch(body: Record<string, any>): Promise<any> {
-  const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
-  if (error) throw error;
-  if (data?.ok === false) throw new Error(data.error || 'Edge function failed');
-  return data;
+/** Try multiple base URLs until one works */
+async function fetchWithFallback(path: string, server: string): Promise<any> {
+  const bases = getAlternativeBases(server);
+  let lastError: Error | null = null;
+  for (const base of bases) {
+    try {
+      return await directFetch(`${base}${path}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Failed ${base}${path}:`, lastError.message);
+    }
+  }
+  throw lastError || new Error('All connection attempts failed');
 }
 
 // ============ Account Info ============
@@ -71,24 +90,9 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
     isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null,
   };
 
-  // Always use Edge Function first (avoids mixed content & CORS issues)
   try {
-    const data = await edgeFetch({
-      type: 'xtream_account_info',
-      server: creds.server,
-      username: creds.username,
-      password: creds.password,
-    });
-    return data?.account || fallback;
-  } catch (edgeErr) {
-    console.warn('Edge function account info failed:', edgeErr);
-  }
-
-  // Fallback: Try browser direct (only works if both are HTTP or server supports HTTPS)
-  try {
-    const base = buildBase(creds.server);
-    const url = apiUrl(base, creds.username, creds.password);
-    const data = await browserFetch(url, 12000);
+    const path = apiPath(creds.username, creds.password);
+    const data = await fetchWithFallback(path, creds.server);
     const info = data?.user_info || {};
     return {
       username: info.username || creds.username,
@@ -100,8 +104,8 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
       createdAt: toIsoDate(info.created_at),
       message: info.message || undefined,
     };
-  } catch (directErr) {
-    console.warn('Direct account info also failed:', directErr);
+  } catch (err) {
+    console.warn('Account info failed:', err);
     return fallback;
   }
 }
@@ -109,91 +113,97 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
 // ============ Playlist ============
 
 export async function fetchXtreamPlaylist(creds: XtreamCredentials): Promise<ParsedPlaylist> {
-  // Always use Edge Function first (server-side, no mixed content issues)
-  try {
-    const data = await edgeFetch({
-      type: 'xtream',
-      server: creds.server,
-      username: creds.username,
-      password: creds.password,
-    });
-    return data as ParsedPlaylist;
-  } catch (edgeErr) {
-    console.warn('Edge function Xtream fetch failed:', edgeErr);
+  // Find a working base URL
+  const path = apiPath(creds.username, creds.password);
+  let workingBase = '';
+  const bases = getAlternativeBases(creds.server);
+
+  for (const base of bases) {
+    try {
+      const data = await directFetch(`${base}${path}`, 15000);
+      if (data?.user_info) {
+        workingBase = base;
+        break;
+      }
+    } catch {
+      // try next
+    }
   }
 
-  // Fallback: Try browser direct (only works same-protocol)
-  try {
-    const base = buildBase(creds.server);
-    const api = (action: string) => apiUrl(base, creds.username, creds.password, action);
-
-    const [liveCats, liveStreams] = await Promise.all([
-      browserFetch(api('get_live_categories')),
-      browserFetch(api('get_live_streams'), 20000),
-    ]);
-
-    if (!Array.isArray(liveStreams)) throw new Error('Invalid response');
-
-    const liveCatMap = new Map(
-      Array.isArray(liveCats) ? liveCats.map((c: any) => [String(c.category_id), c.category_name]) : []
-    );
-
-    const channels: Channel[] = liveStreams.map((s: any) => ({
-      id: `xt-${s.stream_id}`,
-      name: s.name || `Channel ${s.stream_id}`,
-      url: `${base}/live/${creds.username}/${creds.password}/${s.stream_id}.ts`,
-      logo: s.stream_icon || undefined,
-      group: liveCatMap.get(String(s.category_id)) || 'Live',
-      tvgId: s.epg_channel_id || undefined,
-      type: 'live' as const,
-    }));
-
-    // VOD (optional)
-    try {
-      const [vodCats, vodStreams] = await Promise.all([
-        browserFetch(api('get_vod_categories')),
-        browserFetch(api('get_vod_streams'), 20000),
-      ]);
-      if (Array.isArray(vodStreams) && Array.isArray(vodCats)) {
-        const vodCatMap = new Map(vodCats.map((c: any) => [String(c.category_id), c.category_name]));
-        for (const s of vodStreams) {
-          channels.push({
-            id: `vod-${s.stream_id}`, name: s.name,
-            url: `${base}/movie/${creds.username}/${creds.password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
-            logo: s.stream_icon || undefined,
-            group: vodCatMap.get(String(s.category_id)) || 'Movies',
-            type: 'movie' as const,
-          });
-        }
-      }
-    } catch { /* VOD is optional */ }
-
-    // Series (optional)
-    try {
-      const [serCats, serList] = await Promise.all([
-        browserFetch(api('get_series_categories')),
-        browserFetch(api('get_series')),
-      ]);
-      if (Array.isArray(serList) && Array.isArray(serCats)) {
-        const serCatMap = new Map(serCats.map((c: any) => [String(c.category_id), c.category_name]));
-        for (const s of serList) {
-          channels.push({
-            id: `ser-${s.series_id}`, name: s.name, url: '',
-            logo: s.cover || undefined,
-            group: serCatMap.get(String(s.category_id)) || 'Series',
-            type: 'series' as const,
-          });
-        }
-      }
-    } catch { /* Series is optional */ }
-
-    const categories = Array.from(new Set(channels.map(c => c.group!).filter(Boolean))).sort();
-    return { channels, categories };
-
-  } catch (directErr) {
+  if (!workingBase) {
     throw new Error(
-      `فشل الاتصال بالمزود.\n\n` +
-      `جرب تحميل ملف M3U من الزر أدناه وارفعه في تبويب "File".`
+      'فشل الاتصال بالمزود.\n' +
+      'تأكد من صحة بيانات الدخول أو جرب رفع ملف M3U من تبويب "Upload File".'
     );
   }
+
+  const api = `${workingBase}${path}`;
+
+  // Fetch all data in parallel from user's browser directly
+  const [liveCats, liveStreams, vodCats, vodStreams, serCats, serList] = await Promise.all([
+    directFetch(`${api}&action=get_live_categories`).catch(() => []),
+    directFetch(`${api}&action=get_live_streams`, 30000).catch(() => []),
+    directFetch(`${api}&action=get_vod_categories`).catch(() => []),
+    directFetch(`${api}&action=get_vod_streams`, 30000).catch(() => []),
+    directFetch(`${api}&action=get_series_categories`).catch(() => []),
+    directFetch(`${api}&action=get_series`).catch(() => []),
+  ]);
+
+  const channels: Channel[] = [];
+
+  // Live
+  if (Array.isArray(liveStreams) && Array.isArray(liveCats)) {
+    const catMap = new Map(liveCats.map((c: any) => [String(c.category_id), c.category_name || 'Live']));
+    for (const s of liveStreams) {
+      if (!s.stream_id) continue;
+      channels.push({
+        id: `xt-${s.stream_id}`,
+        name: s.name || `Channel ${s.stream_id}`,
+        url: `${workingBase}/live/${creds.username}/${creds.password}/${s.stream_id}.ts`,
+        logo: s.stream_icon || undefined,
+        group: catMap.get(String(s.category_id)) || 'Live',
+        tvgId: s.epg_channel_id || undefined,
+        type: 'live' as const,
+      });
+    }
+  }
+
+  // VOD
+  if (Array.isArray(vodStreams) && Array.isArray(vodCats)) {
+    const catMap = new Map(vodCats.map((c: any) => [String(c.category_id), c.category_name || 'Movies']));
+    for (const s of vodStreams) {
+      if (!s.stream_id) continue;
+      channels.push({
+        id: `vod-${s.stream_id}`,
+        name: s.name || `Movie ${s.stream_id}`,
+        url: `${workingBase}/movie/${creds.username}/${creds.password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+        logo: s.stream_icon || undefined,
+        group: catMap.get(String(s.category_id)) || 'Movies',
+        type: 'movie' as const,
+      });
+    }
+  }
+
+  // Series
+  if (Array.isArray(serList) && Array.isArray(serCats)) {
+    const catMap = new Map(serCats.map((c: any) => [String(c.category_id), c.category_name || 'Series']));
+    for (const s of serList) {
+      if (!s.series_id) continue;
+      channels.push({
+        id: `ser-${s.series_id}`,
+        name: s.name || `Series ${s.series_id}`,
+        url: '',
+        logo: s.cover || undefined,
+        group: catMap.get(String(s.category_id)) || 'Series',
+        type: 'series' as const,
+      });
+    }
+  }
+
+  if (channels.length === 0) {
+    throw new Error('لم يتم العثور على أي قنوات. تأكد من صحة بيانات الدخول.');
+  }
+
+  const categories = Array.from(new Set(channels.map(c => c.group!).filter(Boolean))).sort();
+  return { channels, categories };
 }
