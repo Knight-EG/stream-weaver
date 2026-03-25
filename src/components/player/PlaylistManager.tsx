@@ -34,7 +34,7 @@ export function setActivePlaylistId(id: string) {
 }
 
 interface PlaylistManagerProps {
-  onLoadPlaylist: (source: PlaylistSource) => void;
+  onLoadPlaylist: (source: PlaylistSource) => Promise<boolean>;
   onPlaylistActivated?: (playlist: SavedPlaylist) => void;
   loading: boolean;
   error: string | null;
@@ -87,7 +87,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     // Auto-load is handled by Index.tsx, skip here to avoid duplicate calls
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleAdd = (source?: PlaylistSource) => {
+  const handleAdd = async (source?: PlaylistSource) => {
     const finalSource = source || (
       mode === 'm3u' && m3uUrl.trim()
         ? { type: 'm3u' as const, url: m3uUrl.trim() }
@@ -97,6 +97,12 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     );
 
     if (!finalSource) return;
+
+    const success = await onLoadPlaylist(finalSource);
+    if (!success) {
+      setShowAddForm(true);
+      return;
+    }
 
     const name = playlistName.trim() || (
       finalSource.type === 'xtream' ? `Xtream - ${finalSource.credentials.server.replace(/https?:\/\//, '')}` :
@@ -115,7 +121,6 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     setPlaylists(updated);
     savePlaylistList(updated);
     setActivePlaylistId(newPlaylist.id);
-    onLoadPlaylist(finalSource);
     onPlaylistActivated?.(newPlaylist);
 
     // Reset form
@@ -136,14 +141,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     reader.onload = () => {
       const content = reader.result as string;
       const source: PlaylistSource = { type: 'file', content };
-      handleAdd(source);
+      void handleAdd(source);
     };
     reader.readAsText(file);
   };
 
-  const handleSwitch = (playlist: SavedPlaylist) => {
+  const handleSwitch = async (playlist: SavedPlaylist) => {
+    const success = await onLoadPlaylist(playlist.source);
+    if (!success) return;
     setActivePlaylistId(playlist.id);
-    onLoadPlaylist(playlist.source);
     onPlaylistActivated?.(playlist);
   };
 
@@ -219,7 +225,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
               {playlists.map(playlist => (
                 <button
                   key={playlist.id}
-                  onClick={() => editingId !== playlist.id && handleSwitch(playlist)}
+                  onClick={() => editingId !== playlist.id && void handleSwitch(playlist)}
                   className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer tv-focusable ${
                     activeId === playlist.id
                       ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
@@ -257,7 +263,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
 
                   <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                     <button
-                      onClick={() => handleSwitch(playlist)}
+                      onClick={() => { void handleSwitch(playlist); }}
                       className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 tv-focusable flex items-center gap-1.5"
                       data-focusable="true"
                     >
@@ -392,7 +398,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
             <div className="flex gap-2">
               {mode !== 'file' && (
                 <button
-                  onClick={() => handleAdd()}
+                  onClick={() => { void handleAdd(); }}
                   disabled={loading}
                   className="flex-1 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm tv-focusable disabled:opacity-50 flex items-center justify-center gap-2"
                   data-focusable="true"

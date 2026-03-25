@@ -61,7 +61,7 @@ export function usePlaylist() {
     })();
   }, []);
 
-  const loadPlaylist = useCallback(async (source: PlaylistSource) => {
+  const loadPlaylist = useCallback(async (source: PlaylistSource): Promise<boolean> => {
     setState(s => ({ ...s, loading: true, error: null, channels: [], categories: [], categoryIndex: new Map(), selectedCategory: null }));
     try {
       const cacheKey = source.type === 'm3u' ? source.url : source.type === 'xtream' ? `${source.credentials.server}:${source.credentials.username}` : `file-${Date.now()}`;
@@ -77,7 +77,7 @@ export function usePlaylist() {
           selectedCategory: null,
           categoryIndex,
         }));
-        return;
+        return true;
       }
 
       let result: ParsedPlaylist;
@@ -114,19 +114,20 @@ export function usePlaylist() {
         selectedCategory: null,
         categoryIndex,
       }));
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load playlist';
       setState(s => {
-        // Only show toast if we don't already have the same error (prevent spam)
         if (s.error !== message) {
           toast.error('فشل تحميل قائمة التشغيل', {
             description: message.length > 120 ? message.slice(0, 120) + '…' : message,
             duration: 8000,
-            id: 'playlist-load-error', // deduplicate: same ID = same toast, no stacking
+            id: 'playlist-load-error',
           });
         }
         return { ...s, loading: false, error: message };
       });
+      return false;
     }
   }, []);
 
