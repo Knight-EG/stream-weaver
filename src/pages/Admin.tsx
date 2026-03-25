@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette } from 'lucide-react';
+import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette, Infinity, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhiteLabelSettings } from '@/components/admin/WhiteLabelSettings';
 import { TrialSettings } from '@/components/admin/TrialSettings';
@@ -60,6 +60,30 @@ export default function Admin() {
 
   async function deleteDevice(deviceId: string) {
     await supabase.from('devices').update({ is_active: false }).eq('id', deviceId);
+    loadData();
+  }
+
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [grantUserId, setGrantUserId] = useState('');
+  const [grantPlanType, setGrantPlanType] = useState<'standard' | 'lifetime'>('standard');
+  const [grantDays, setGrantDays] = useState(30);
+  const [grantMaxDevices, setGrantMaxDevices] = useState(3);
+
+  async function grantSubscription() {
+    if (!grantUserId) return;
+    const expiresAt = grantPlanType === 'lifetime'
+      ? new Date('2099-12-31T23:59:59Z').toISOString()
+      : new Date(Date.now() + grantDays * 86400000).toISOString();
+
+    await supabase.from('subscriptions').insert({
+      user_id: grantUserId,
+      status: 'active',
+      plan_type: grantPlanType,
+      expires_at: expiresAt,
+      max_devices: grantMaxDevices,
+    } as any);
+    setShowGrantModal(false);
+    setGrantUserId('');
     loadData();
   }
 
@@ -224,12 +248,95 @@ export default function Admin() {
 
       {/* Subscriptions Tab */}
       {tab === 'subscriptions' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <button
+            onClick={() => setShowGrantModal(true)}
+            className="px-4 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable flex items-center gap-2 text-sm"
+            data-focusable="true"
+          >
+            <Plus className="w-4 h-4" /> Grant Subscription
+          </button>
+
+          {/* Grant Modal */}
+          {showGrantModal && (
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <h3 className="text-foreground font-semibold">Grant Subscription</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">User</label>
+                  <select
+                    value={grantUserId}
+                    onChange={e => setGrantUserId(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select user...</option>
+                    {profiles.map((p: any) => (
+                      <option key={p.user_id} value={p.user_id}>{p.display_name || p.email}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Plan Type</label>
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => setGrantPlanType('standard')}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${
+                        grantPlanType === 'standard' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" /> Standard
+                    </button>
+                    <button
+                      onClick={() => setGrantPlanType('lifetime')}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${
+                        grantPlanType === 'lifetime' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <Infinity className="w-3.5 h-3.5" /> Lifetime
+                    </button>
+                  </div>
+                </div>
+                {grantPlanType === 'standard' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium">Duration (days)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={grantDays}
+                      onChange={e => setGrantDays(Number(e.target.value))}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Max Devices</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={grantMaxDevices}
+                    onChange={e => setGrantMaxDevices(Number(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={grantSubscription} className="flex-1 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm tv-focusable" data-focusable="true">
+                  Grant
+                </button>
+                <button onClick={() => setShowGrantModal(false)} className="px-4 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm tv-focusable" data-focusable="true">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {subscriptions
             .filter((s: any) => search ? profiles.find((p: any) => p.user_id === s.user_id && (p.display_name || p.email || '').toLowerCase().includes(search.toLowerCase())) : true)
             .map((s: any) => {
               const profile = profiles.find((p: any) => p.user_id === s.user_id);
-              const isExpired = new Date(s.expires_at) < new Date();
+              const isLifetime = (s as any).plan_type === 'lifetime';
+              const isExpired = !isLifetime && new Date(s.expires_at) < new Date();
               return (
                 <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -238,12 +345,21 @@ export default function Admin() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Expires: {new Date(s.expires_at).toLocaleDateString()}</p>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        !isExpired && s.status === 'active' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'
-                      }`}>
-                        {!isExpired && s.status === 'active' ? 'Active' : 'Expired'}
-                      </span>
+                      <p className="text-sm text-muted-foreground">
+                        {isLifetime ? 'Lifetime' : `Expires: ${new Date(s.expires_at).toLocaleDateString()}`}
+                      </p>
+                      <div className="flex items-center gap-2 justify-end">
+                        {isLifetime && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-accent/20 text-accent">
+                            <Infinity className="w-3 h-3" /> Lifetime
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          !isExpired && s.status === 'active' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'
+                        }`}>
+                          {!isExpired && s.status === 'active' ? 'Active' : 'Expired'}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">Max {s.max_devices} devices</p>
                   </div>

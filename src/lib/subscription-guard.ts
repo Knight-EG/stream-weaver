@@ -9,6 +9,7 @@ export interface AccessCheck {
   subscription?: {
     status: string;
     expiresAt: string;
+    planType?: string;
   };
   device?: {
     id: string;
@@ -39,10 +40,10 @@ export async function checkAccess(): Promise<AccessCheck> {
   const trialActive = trialEndsAt ? now < trialEndsAt : false;
   const trialDaysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
-  // Check subscription
+  // Check subscription — lifetime subs have far-future expiry
   const { data: sub } = await supabase
     .from('subscriptions')
-    .select('status, expires_at')
+    .select('status, expires_at, plan_type')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .gte('expires_at', now.toISOString())
@@ -70,7 +71,7 @@ export async function checkAccess(): Promise<AccessCheck> {
       reason: deviceResult.error || 'Device activation failed',
       trialActive,
       trialDaysLeft,
-      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at } : undefined,
+      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
     };
   }
 
@@ -78,7 +79,7 @@ export async function checkAccess(): Promise<AccessCheck> {
     allowed: true,
     trialActive: trialActive && !hasActiveSubscription,
     trialDaysLeft,
-    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at } : undefined,
+    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
     device: {
       id: deviceResult.device!.id,
       isActive: deviceResult.device!.is_active,
