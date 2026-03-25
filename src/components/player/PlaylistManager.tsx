@@ -83,15 +83,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
       } catch {}
     }
 
-    // Auto-load active playlist if we have playlists but no channels loaded
-    if (list.length > 0 && (currentChannelCount === 0 || currentChannelCount === undefined) && !loading) {
-      const aid = getActivePlaylistId();
-      const active = list.find(p => p.id === aid) || list[0];
-      if (active && active.source.type !== 'file') {
-        setActivePlaylistId(active.id);
-        onLoadPlaylist(active.source);
-      }
-    }
+    // Auto-load is handled by Index.tsx, skip here to avoid duplicate calls
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = (source?: PlaylistSource) => {
