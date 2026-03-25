@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { WhiteLabelSettings } from '@/components/admin/WhiteLabelSettings';
 
-type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics';
+type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics' | 'branding';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('users');
@@ -66,6 +67,7 @@ export default function Admin() {
     { id: 'devices', label: 'Devices', icon: <Monitor className="w-4 h-4" /> },
     { id: 'subscriptions', label: 'Subs', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'branding', label: 'Brand', icon: <Palette className="w-4 h-4" /> },
   ];
 
   return (
@@ -285,6 +287,9 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* Branding Tab */}
+      {tab === 'branding' && <WhiteLabelSettings />}
     </div>
   );
 }

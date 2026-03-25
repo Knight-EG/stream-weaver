@@ -7,11 +7,13 @@ import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
 import { SearchBar } from '@/components/player/SearchBar';
-import { Menu, X, Settings } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Index() {
   useSpatialNavigation();
+  const { user, signOut } = useAuth();
 
   const playlist = usePlaylist();
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
@@ -50,13 +52,22 @@ export default function Index() {
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-bold text-gradient">IPTV Player</h1>
             <div className="flex gap-1">
-              <Link to="/admin" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true">
+              <Link to="/settings" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title="Settings">
+                <User className="w-4 h-4" />
+              </Link>
+              <Link to="/admin" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title="Admin">
                 <Settings className="w-4 h-4" />
               </Link>
               <button onClick={() => setSidebarOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true">
                 <X className="w-4 h-4" />
               </button>
             </div>
+          </div>
+          <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground border-b border-border pb-3">
+            <span className="truncate">{user?.email}</span>
+            <button onClick={signOut} className="ml-auto text-muted-foreground hover:text-destructive tv-focusable" data-focusable="true" title="Sign Out">
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
           <SearchBar value={playlist.searchQuery} onChange={playlist.setSearch} />
           <CategorySidebar
