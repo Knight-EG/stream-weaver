@@ -121,6 +121,7 @@ export function NotificationBell() {
           >
             View all notifications →
           </Link>
+          </div>
         </div>
       )}
     </div>
