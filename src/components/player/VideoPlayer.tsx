@@ -33,8 +33,11 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
   const [currentEPG, setCurrentEPG] = useState<EPGProgram | null>(null);
   const [epgProgress, setEpgProgress] = useState(0);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [resumePosition, setResumePosition] = useState<number | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
   const hideTimer = useRef<number>(0);
   const retryTimer = useRef<number>(0);
+  const saveInterval = useRef<number>(0);
 
   const allUrls = [url, ...fallbackUrls];
   const activeUrl = allUrls[currentUrlIndex] || url;
