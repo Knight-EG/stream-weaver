@@ -514,6 +514,10 @@ const ar: TranslationKeys = {
   couponActive: 'نشط',
   couponExpired: 'منتهي',
   
+  dashboardHome: 'الرئيسية',
+  dashboardLive: 'البث المباشر',
+  dashboardViewAll: 'عرض الكل',
+  
   moviesTitle: 'الأفلام',
   moviesSearchPlaceholder: 'ابحث عن الأفلام...',
   moviesEmpty: 'لا توجد أفلام',
