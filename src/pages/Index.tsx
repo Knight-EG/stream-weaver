@@ -86,9 +86,16 @@ export default function Index() {
           </p>
 
           <div className="flex flex-col gap-3">
+            <Link
+              to="/pricing"
+              className="px-6 py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable text-center flex items-center justify-center gap-2"
+              data-focusable="true"
+            >
+              <CreditCard className="w-4 h-4" /> Subscribe Now
+            </Link>
             <button
               onClick={refreshAccess}
-              className="px-6 py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable flex items-center justify-center gap-2"
+              className="px-6 py-3 rounded-lg bg-secondary text-secondary-foreground font-semibold tv-focusable flex items-center justify-center gap-2"
               data-focusable="true"
             >
               <ShieldCheck className="w-4 h-4" /> Check Activation
