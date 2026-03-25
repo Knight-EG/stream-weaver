@@ -213,13 +213,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
 
             <div className="space-y-2">
               {playlists.map(playlist => (
-                <div
+                <button
                   key={playlist.id}
-                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                  onClick={() => editingId !== playlist.id && handleSwitch(playlist)}
+                  className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer tv-focusable ${
                     activeId === playlist.id
                       ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
                       : 'border-border bg-card hover:border-muted-foreground/30'
                   }`}
+                  data-focusable="true"
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     activeId === playlist.id ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
@@ -249,20 +251,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {activeId !== playlist.id && (
-                      <button
-                        onClick={() => handleSwitch(playlist)}
-                        className="p-2 rounded-lg text-primary hover:bg-primary/10 tv-focusable"
-                        data-focusable="true"
-                        title="Switch to this playlist"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
-                    )}
-                    {activeId === playlist.id && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary uppercase">Active</span>
-                    )}
+                  <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleSwitch(playlist)}
+                      className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 tv-focusable flex items-center gap-1.5"
+                      data-focusable="true"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      {activeId === playlist.id ? 'Reload' : 'Connect'}
+                    </button>
                     <button
                       onClick={() => { setEditingId(playlist.id); setEditName(playlist.name); }}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted tv-focusable"
@@ -278,7 +275,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
