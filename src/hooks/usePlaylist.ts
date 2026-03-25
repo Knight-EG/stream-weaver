@@ -84,9 +84,26 @@ export function usePlaylist() {
 
         const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
         if (error) throw error;
+
+        if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
+          throw new Error(typeof data.error === 'string' ? data.error : 'Playlist provider request failed');
+        }
+
         result = data as ParsedPlaylist;
       } catch (serverErr) {
         console.warn('Server-side parsing failed, falling back to client:', serverErr);
+
+        const serverMessage = serverErr instanceof Error ? serverErr.message : String(serverErr);
+        const shouldNotFallbackToClient = source.type === 'xtream' && (
+          serverMessage.includes('provider blocked both API and M3U requests') ||
+          serverMessage.includes('provider returned HTML instead of JSON') ||
+          serverMessage.includes('provider returned invalid JSON')
+        );
+
+        if (shouldNotFallbackToClient) {
+          throw new Error(serverMessage);
+        }
+
         const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
         const { fetchXtreamPlaylist } = await import('@/lib/xtream');
         
