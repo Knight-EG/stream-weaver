@@ -6,6 +6,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
 import { isTVDevice } from '@/lib/tv-detect';
 import { TVLayout } from '@/components/tv/TVLayout';
+import { type XtreamAccountInfo, fetchXtreamAccountInfo } from '@/lib/xtream';
 import { PlaylistManager, getSavedPlaylists, getActivePlaylistId, setActivePlaylistId } from '@/components/player/PlaylistManager';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
@@ -36,6 +37,7 @@ export default function Index() {
   const [seriesCategory, setSeriesCategory] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [autoLoaded, setAutoLoaded] = useState(false);
+  const [xtreamAccount, setXtreamAccount] = useState<XtreamAccountInfo | null>(null);
 
   // Auto-load saved playlist on mount
   useEffect(() => {
@@ -47,6 +49,12 @@ export default function Index() {
       setAutoLoaded(true);
       setActivePlaylistId(active.id);
       playlist.loadPlaylist(active.source);
+      // Fetch xtream account info if applicable
+      if (active.source.type === 'xtream') {
+        fetchXtreamAccountInfo(active.source.credentials).then(setXtreamAccount);
+      } else {
+        setXtreamAccount(null);
+      }
     } else {
       setAutoLoaded(true);
     }
@@ -159,6 +167,11 @@ export default function Index() {
           setActiveChannel(null);
           playlist.loadPlaylist(source);
           setShowPlaylistManager(false);
+          if (source.type === 'xtream') {
+            fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+          } else {
+            setXtreamAccount(null);
+          }
         }}
         loading={playlist.loading}
         error={playlist.error}
@@ -220,7 +233,38 @@ export default function Index() {
               </div>
             </div>
 
-            {/* Main Navigation */}
+            {/* Xtream Account Info */}
+            {xtreamAccount && (
+              <div className="mx-3 my-2 p-2.5 rounded-lg bg-muted/50 border border-border space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Provider</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                    xtreamAccount.status === 'Active' ? 'bg-success/20 text-success' :
+                    xtreamAccount.status === 'Expired' ? 'bg-destructive/20 text-destructive' :
+                    'bg-warning/20 text-warning'
+                  }`}>{xtreamAccount.status}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">User</span>
+                  <span className="text-foreground font-medium truncate ms-2">{xtreamAccount.username}</span>
+                </div>
+                {xtreamAccount.expDate && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">Expires</span>
+                    <span className={`font-medium ${new Date(xtreamAccount.expDate) < new Date() ? 'text-destructive' : 'text-foreground'}`}>
+                      {new Date(xtreamAccount.expDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Connections</span>
+                  <span className="text-foreground font-medium">{xtreamAccount.activeCons} / {xtreamAccount.maxConnections}</span>
+                </div>
+                {xtreamAccount.isTrial && (
+                  <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-warning/20 text-warning">Trial Account</span>
+                )}
+              </div>
+            )}
             <nav className="p-2 space-y-1">
               {[
                 { id: 'home' as Section, icon: Home, label: t('dashboardHome'), count: playlist.channels.length },
