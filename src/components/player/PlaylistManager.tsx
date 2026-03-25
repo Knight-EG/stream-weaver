@@ -225,7 +225,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
               {playlists.map(playlist => (
                 <button
                   key={playlist.id}
-                  onClick={() => editingId !== playlist.id && handleSwitch(playlist)}
+                  onClick={() => editingId !== playlist.id && void handleSwitch(playlist)}
                   className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer tv-focusable ${
                     activeId === playlist.id
                       ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
