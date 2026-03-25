@@ -182,8 +182,42 @@ export default function Index() {
     );
   }
 
-  // TV Mode - Netflix/Shahid style interface
+  // TV Mode - show activation screen if no channels, otherwise show TV layout
   if (isTVDevice()) {
+    if (playlist.channels.length === 0 && !playlist.loading && autoLoaded && !tvManualEntry) {
+      return (
+        <TVActivationScreen
+          onActivated={(source) => {
+            playlist.loadPlaylist(source);
+            if (source.type === 'xtream') {
+              fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+            }
+          }}
+          onManualEntry={() => setTvManualEntry(true)}
+        />
+      );
+    }
+    if (tvManualEntry && playlist.channels.length === 0 && !playlist.loading) {
+      return (
+        <PlaylistManager
+          onLoadPlaylist={async (source) => {
+            setActiveChannel(null);
+            const success = await playlist.loadPlaylist(source);
+            if (!success) return false;
+            setTvManualEntry(false);
+            if (source.type === 'xtream') {
+              fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+            } else {
+              setXtreamAccount(null);
+            }
+            return true;
+          }}
+          loading={playlist.loading}
+          error={playlist.error}
+          currentChannelCount={playlist.channels.length}
+        />
+      );
+    }
     return <TVLayout channels={playlist.channels} favorites={playlist.favorites} onToggleFavorite={playlist.toggleFavorite} />;
   }
 
