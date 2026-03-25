@@ -105,26 +105,65 @@ async function fetchUpstreamText(url: string, agentIndex: number): Promise<{ res
   }
 }
 
-// Try fetching with multiple User-Agent strings until one works
+// Free CORS proxies to try when direct fetch gets 403 (datacenter IP blocked)
+const corsProxies = [
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+// Try direct fetch with multiple User-Agents, then fallback to CORS proxies
 async function fetchWithRetry(url: string): Promise<{ response: Response; text: string }> {
   let lastError: Error | null = null;
-  const maxRetries = userAgents.length;
 
-  for (let i = 0; i < maxRetries; i++) {
+  // Phase 1: Try direct with different User-Agents (max 3 to save time)
+  const directTries = Math.min(3, userAgents.length);
+  for (let i = 0; i < directTries; i++) {
     try {
       const result = await fetchUpstreamText(url, i);
-      if (result.response.status === 403 && i < maxRetries - 1) {
+      if (result.response.status === 403 && i < directTries - 1) {
         console.log(`Got 403 with agent ${i} (${userAgents[i]}), trying next...`);
         continue;
+      }
+      if (result.response.ok) return result;
+      // If last direct attempt still 403, move to proxy phase
+      if (result.response.status === 403) {
+        console.log('All direct attempts got 403, trying CORS proxies...');
+        break;
       }
       return result;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`Fetch attempt ${i + 1} failed:`, lastError.message);
+      console.warn(`Direct attempt ${i + 1} failed:`, lastError.message);
     }
   }
 
-  throw lastError || new Error('All fetch attempts failed');
+  // Phase 2: Try CORS proxies
+  for (let p = 0; p < corsProxies.length; p++) {
+    const proxiedUrl = corsProxies[p](url);
+    try {
+      console.log(`Trying CORS proxy ${p + 1}...`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(proxiedUrl, {
+        headers: { 'Accept': '*/*' },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      const text = await response.text();
+      
+      if (response.ok && text.length > 10 && !looksLikeHtml(text)) {
+        console.log(`CORS proxy ${p + 1} succeeded!`);
+        return { response, text };
+      }
+      console.log(`CORS proxy ${p + 1} returned ${response.status}, content looks ${looksLikeHtml(text) ? 'HTML' : 'OK'}`);
+    } catch (err) {
+      console.warn(`CORS proxy ${p + 1} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  throw lastError || new Error('All fetch attempts (direct + proxy) failed');
 }
 
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
