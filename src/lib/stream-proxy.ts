@@ -27,6 +27,7 @@ export async function getSecureStreamUrl(channelId: string, channelUrl: string):
       channel_id: channelId,
       channel_url: channelUrl,
       device_id: deviceId,
+      action: 'get_token',
     },
     headers: {
       'Content-Type': 'application/json',
