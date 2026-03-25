@@ -173,6 +173,11 @@ type TranslationKeys = {
   couponActive: string;
   couponExpired: string;
   
+  // Dashboard
+  dashboardHome: string;
+  dashboardLive: string;
+  dashboardViewAll: string;
+  
   // Movies & Series
   moviesTitle: string;
   moviesSearchPlaceholder: string;
@@ -340,6 +345,10 @@ const en: TranslationKeys = {
   couponActive: 'Active',
   couponExpired: 'Expired',
   
+  dashboardHome: 'Home',
+  dashboardLive: 'Live TV',
+  dashboardViewAll: 'View All',
+  
   moviesTitle: 'Movies',
   moviesSearchPlaceholder: 'Search movies...',
   moviesEmpty: 'No movies found',
@@ -505,6 +514,10 @@ const ar: TranslationKeys = {
   couponActive: 'نشط',
   couponExpired: 'منتهي',
   
+  dashboardHome: 'الرئيسية',
+  dashboardLive: 'البث المباشر',
+  dashboardViewAll: 'عرض الكل',
+  
   moviesTitle: 'الأفلام',
   moviesSearchPlaceholder: 'ابحث عن الأفلام...',
   moviesEmpty: 'لا توجد أفلام',
@@ -669,6 +682,10 @@ const tr: TranslationKeys = {
   couponExpiry: 'Son Kullanma',
   couponActive: 'Aktif',
   couponExpired: 'Süresi Dolmuş',
+  
+  dashboardHome: 'Ana Sayfa',
+  dashboardLive: 'Canlı TV',
+  dashboardViewAll: 'Tümünü Gör',
   
   moviesTitle: 'Filmler',
   moviesSearchPlaceholder: 'Film ara...',
