@@ -353,6 +353,7 @@ export default function Index() {
             {/* Quick Links */}
             <div className="p-2 border-t border-border space-y-1 mt-auto">
               {[
+                { to: '/activate', icon: Tv, label: 'Activate TV' },
                 { to: '/settings', icon: User, label: t('settings') },
                 { to: '/pricing', icon: CreditCard, label: t('pricingTitle') },
                 { to: '/admin', icon: Settings, label: t('adminTitle') },
