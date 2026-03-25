@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
-import { type Channel, type ParsedPlaylist, fetchAndParseM3U } from '@/lib/m3u-parser';
-import { type XtreamCredentials, fetchXtreamPlaylist } from '@/lib/xtream';
+import { type Channel, type ParsedPlaylist } from '@/lib/m3u-parser';
+import { type XtreamCredentials } from '@/lib/xtream';
 import { getCachedPlaylist, setCachedPlaylist, buildCategoryIndex } from '@/lib/playlist-cache';
+import { supabase } from '@/integrations/supabase/client';
 
 export type PlaylistSource =
   | { type: 'm3u'; url: string }
@@ -46,25 +47,51 @@ export function usePlaylist() {
   const loadPlaylist = useCallback(async (source: PlaylistSource) => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
-      // Check cache first
       const cacheKey = source.type === 'm3u' ? source.url : `${source.credentials.server}:${source.credentials.username}`;
+      
+      // Check local cache first
       const cached = getCachedPlaylist(cacheKey);
-
-      let result: ParsedPlaylist;
       if (cached) {
-        result = cached;
-      } else {
+        const categoryIndex = buildCategoryIndex(cached.channels);
+        setState(s => ({
+          ...s,
+          channels: cached.channels,
+          categories: cached.categories,
+          loading: false,
+          selectedCategory: null,
+          categoryIndex,
+        }));
+        return;
+      }
+
+      // Try server-side parsing via edge function
+      let result: ParsedPlaylist;
+      try {
+        const body = source.type === 'm3u'
+          ? { type: 'm3u', url: source.url }
+          : { type: 'xtream', server: source.credentials.server, username: source.credentials.username, password: source.credentials.password };
+
+        const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
+
+        if (error) throw error;
+        result = data as ParsedPlaylist;
+      } catch (serverErr) {
+        // Fallback to client-side parsing
+        console.warn('Server-side parsing failed, falling back to client:', serverErr);
+        const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+        const { fetchXtreamPlaylist } = await import('@/lib/xtream');
+        
         if (source.type === 'm3u') {
           result = await fetchAndParseM3U(source.url);
         } else {
           result = await fetchXtreamPlaylist(source.credentials);
         }
-        // Cache the result
-        setCachedPlaylist(cacheKey, result);
       }
 
-      const categoryIndex = buildCategoryIndex(result.channels);
+      // Cache locally
+      setCachedPlaylist(cacheKey, result);
 
+      const categoryIndex = buildCategoryIndex(result.channels);
       setState(s => ({
         ...s,
         channels: result.channels,

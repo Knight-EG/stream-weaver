@@ -1,19 +1,21 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useSpatialNavigation } from '@/hooks/useSpatialNavigation';
 import { usePlaylist } from '@/hooks/usePlaylist';
+import { useAccessGuard } from '@/hooks/useAccessGuard';
 import type { Channel } from '@/lib/m3u-parser';
 import { PlaylistSetup } from '@/components/player/PlaylistSetup';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
 import { SearchBar } from '@/components/player/SearchBar';
-import { Menu, X, Settings, LogOut, User } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User, AlertTriangle, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Index() {
   useSpatialNavigation();
   const { user, signOut } = useAuth();
+  const { access, loading: accessLoading, refresh: refreshAccess } = useAccessGuard();
 
   const playlist = usePlaylist();
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
@@ -40,6 +42,53 @@ export default function Index() {
     }
   }, [channelIndex, playlist.filteredChannels]);
 
+  // Access check loading
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  // Access denied (no subscription or device issue)
+  if (access && !access.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8 text-warning" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">Access Restricted</h1>
+          <p className="text-muted-foreground">{access.reason}</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={refreshAccess}
+              className="px-6 py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable"
+              data-focusable="true"
+            >
+              Retry
+            </button>
+            <Link
+              to="/settings"
+              className="px-6 py-3 rounded-lg bg-secondary text-secondary-foreground font-semibold tv-focusable text-center"
+              data-focusable="true"
+            >
+              Manage Devices
+            </Link>
+            <button
+              onClick={signOut}
+              className="px-6 py-3 rounded-lg text-destructive hover:bg-destructive/10 font-semibold tv-focusable"
+              data-focusable="true"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (playlist.channels.length === 0) {
     return <PlaylistSetup onSubmit={playlist.loadPlaylist} loading={playlist.loading} error={playlist.error} />;
   }
@@ -65,7 +114,12 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground border-b border-border pb-3">
             <span className="truncate">{user?.email}</span>
-            <button onClick={signOut} className="ml-auto text-muted-foreground hover:text-destructive tv-focusable" data-focusable="true" title="Sign Out">
+            {access?.subscription && (
+              <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-success/20 text-success">
+                Active
+              </span>
+            )}
+            <button onClick={signOut} className="text-muted-foreground hover:text-destructive tv-focusable" data-focusable="true" title="Sign Out">
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -98,6 +152,7 @@ export default function Index() {
               <VideoPlayer
                 url={activeChannel.url}
                 title={activeChannel.name}
+                channelId={activeChannel.tvgId || activeChannel.id}
                 onBack={() => setActiveChannel(null)}
                 onNext={channelIndex < playlist.filteredChannels.length - 1 ? handleNext : undefined}
                 onPrev={channelIndex > 0 ? handlePrev : undefined}
@@ -112,7 +167,7 @@ export default function Index() {
             )}
           </div>
 
-          {/* Channel List (right panel on desktop) */}
+          {/* Channel List */}
           <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border p-3 overflow-y-auto">
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-2 px-1">
               {playlist.filteredChannels.length} channels
