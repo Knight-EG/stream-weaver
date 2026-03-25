@@ -24,10 +24,11 @@ function buildBase(server: string): string {
   return base;
 }
 
-function buildApiUrl(base: string, username: string, password: string, action?: string): string {
+function apiUrl(base: string, username: string, password: string, action?: string): string {
   const params = `username=${username}&password=${password}`;
-  if (action) return `${base}/player_api.php?${params}&action=${action}`;
-  return `${base}/player_api.php?${params}`;
+  return action
+    ? `${base}/player_api.php?${params}&action=${action}`
+    : `${base}/player_api.php?${params}`;
 }
 
 function toIsoDate(value: unknown): string | null {
@@ -36,24 +37,31 @@ function toIsoDate(value: unknown): string | null {
   return Number.isNaN(ts) ? null : new Date(ts * 1000).toISOString();
 }
 
-function parseAccountInfo(data: any, fallbackUsername: string): XtreamAccountInfo {
-  const info = data?.user_info || {};
-  return {
-    username: info.username || fallbackUsername,
-    status: info.status || 'Unknown',
-    expDate: toIsoDate(info.exp_date),
-    isTrial: info.is_trial === '1' || info.is_trial === true,
-    activeCons: parseInt(info.active_cons, 10) || 0,
-    maxConnections: parseInt(info.max_connections, 10) || 1,
-    createdAt: toIsoDate(info.created_at),
-    message: info.message || undefined,
-  };
+/**
+ * Try fetching from the Xtream server directly from the browser.
+ * This works when:
+ *  - Both the app and server use HTTP, or
+ *  - The server supports HTTPS, or
+ *  - The browser doesn't block the request (mixed content)
+ */
+async function browserFetch(url: string, timeoutMs = 15000): Promise<any> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 /**
- * Strategy: Browser direct fetch FIRST (uses user's real IP).
- * Fallback to Edge Function only if direct fails.
+ * Try fetching via Edge Function (server-side proxy).
+ * This avoids mixed content but may get blocked by some providers (403).
  */
+async function edgeFetch(body: Record<string, any>): Promise<any> {
+  const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
+  if (error) throw error;
+  if (data?.ok === false) throw new Error(data.error || 'Edge function failed');
+  return data;
+}
+
+// ============ Account Info ============
 
 export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<XtreamAccountInfo> {
   const fallback: XtreamAccountInfo = {
@@ -62,26 +70,34 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
   };
 
   const base = buildBase(creds.server);
-  const url = buildApiUrl(base, creds.username, creds.password);
+  const url = apiUrl(base, creds.username, creds.password);
 
-  // 1) Direct from browser — user's real IP
+  // 1) Try browser direct (user's IP — most reliable)
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    if (res.ok) {
-      const data = await res.json();
-      return parseAccountInfo(data, creds.username);
-    }
-  } catch (err) {
-    console.warn('Direct account info failed:', err);
+    const data = await browserFetch(url, 12000);
+    const info = data?.user_info || {};
+    return {
+      username: info.username || creds.username,
+      status: info.status || 'Unknown',
+      expDate: toIsoDate(info.exp_date),
+      isTrial: info.is_trial === '1' || info.is_trial === true,
+      activeCons: parseInt(info.active_cons, 10) || 0,
+      maxConnections: parseInt(info.max_connections, 10) || 1,
+      createdAt: toIsoDate(info.created_at),
+      message: info.message || undefined,
+    };
+  } catch (directErr) {
+    console.warn('Direct account info failed:', directErr);
   }
 
   // 2) Fallback: Edge Function
   try {
-    const { data, error } = await supabase.functions.invoke('parse-playlist', {
-      body: { type: 'xtream_account_info', server: creds.server, username: creds.username, password: creds.password },
+    const data = await edgeFetch({
+      type: 'xtream_account_info',
+      server: creds.server,
+      username: creds.username,
+      password: creds.password,
     });
-    if (error) throw error;
-    if (data?.ok === false) return data.account || fallback;
     return data?.account || fallback;
   } catch (err) {
     console.warn('Edge function account info also failed:', err);
@@ -89,90 +105,97 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
   }
 }
 
+// ============ Playlist ============
+
 export async function fetchXtreamPlaylist(creds: XtreamCredentials): Promise<ParsedPlaylist> {
   const base = buildBase(creds.server);
 
-  // 1) Direct from browser — user's real IP
+  // 1) Try browser direct (user's real IP — avoids datacenter IP blocks)
   try {
-    const [catsRes, streamsRes] = await Promise.all([
-      fetch(buildApiUrl(base, creds.username, creds.password, 'get_live_categories'), { signal: AbortSignal.timeout(15000) }),
-      fetch(buildApiUrl(base, creds.username, creds.password, 'get_live_streams'), { signal: AbortSignal.timeout(20000) }),
+    const api = (action: string) => apiUrl(base, creds.username, creds.password, action);
+
+    // Fetch live, VOD, and series in parallel
+    const [liveCats, liveStreams] = await Promise.all([
+      browserFetch(api('get_live_categories')),
+      browserFetch(api('get_live_streams'), 20000),
     ]);
 
-    if (catsRes.ok && streamsRes.ok) {
-      const categories: any[] = await catsRes.json();
-      const streams: any[] = await streamsRes.json();
+    if (!Array.isArray(liveStreams)) throw new Error('Invalid response');
 
-      if (Array.isArray(categories) && Array.isArray(streams)) {
-        const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
+    const liveCatMap = new Map(
+      Array.isArray(liveCats) ? liveCats.map((c: any) => [String(c.category_id), c.category_name]) : []
+    );
 
-        const liveChannels: Channel[] = streams.map((s: any) => ({
-          id: `xt-${s.stream_id}`,
-          name: s.name,
-          url: `${base}/live/${creds.username}/${creds.password}/${s.stream_id}.ts`,
-          logo: s.stream_icon || undefined,
-          group: catMap.get(s.category_id) || 'Uncategorized',
-          tvgId: s.epg_channel_id || undefined,
-          type: 'live' as const,
-        }));
+    const channels: Channel[] = liveStreams.map((s: any) => ({
+      id: `xt-${s.stream_id}`,
+      name: s.name || `Channel ${s.stream_id}`,
+      url: `${base}/live/${creds.username}/${creds.password}/${s.stream_id}.ts`,
+      logo: s.stream_icon || undefined,
+      group: liveCatMap.get(String(s.category_id)) || 'Live',
+      tvgId: s.epg_channel_id || undefined,
+      type: 'live' as const,
+    }));
 
-        let vodChannels: Channel[] = [];
-        try {
-          const [vodCatsRes, vodStreamsRes] = await Promise.all([
-            fetch(buildApiUrl(base, creds.username, creds.password, 'get_vod_categories'), { signal: AbortSignal.timeout(15000) }),
-            fetch(buildApiUrl(base, creds.username, creds.password, 'get_vod_streams'), { signal: AbortSignal.timeout(20000) }),
-          ]);
-          if (vodCatsRes.ok && vodStreamsRes.ok) {
-            const vodCats: any[] = await vodCatsRes.json();
-            const vodStreams: any[] = await vodStreamsRes.json();
-            if (Array.isArray(vodCats) && Array.isArray(vodStreams)) {
-              const vodCatMap = new Map(vodCats.map((c: any) => [c.category_id, c.category_name]));
-              vodChannels = vodStreams.map((s: any) => ({
-                id: `vod-${s.stream_id}`, name: s.name,
-                url: `${base}/movie/${creds.username}/${creds.password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
-                logo: s.stream_icon || undefined, group: vodCatMap.get(s.category_id) || 'VOD', type: 'movie' as const,
-              }));
-            }
-          }
-        } catch { /* optional */ }
-
-        let seriesChannels: Channel[] = [];
-        try {
-          const [serCatsRes, serStreamsRes] = await Promise.all([
-            fetch(buildApiUrl(base, creds.username, creds.password, 'get_series_categories'), { signal: AbortSignal.timeout(15000) }),
-            fetch(buildApiUrl(base, creds.username, creds.password, 'get_series'), { signal: AbortSignal.timeout(15000) }),
-          ]);
-          if (serCatsRes.ok && serStreamsRes.ok) {
-            const serCats: any[] = await serCatsRes.json();
-            const serStreams: any[] = await serStreamsRes.json();
-            if (Array.isArray(serCats) && Array.isArray(serStreams)) {
-              const serCatMap = new Map(serCats.map((c: any) => [c.category_id, c.category_name]));
-              seriesChannels = serStreams.map((s: any) => ({
-                id: `ser-${s.series_id}`, name: s.name, url: '',
-                logo: s.cover || undefined, group: serCatMap.get(s.category_id) || 'Series', type: 'series' as const,
-              }));
-            }
-          }
-        } catch { /* optional */ }
-
-        const allChannels = [...liveChannels, ...vodChannels, ...seriesChannels];
-        return {
-          channels: allChannels,
-          categories: Array.from(new Set(allChannels.map(c => c.group!))).filter(Boolean).sort(),
-        };
+    // VOD (optional)
+    try {
+      const [vodCats, vodStreams] = await Promise.all([
+        browserFetch(api('get_vod_categories')),
+        browserFetch(api('get_vod_streams'), 20000),
+      ]);
+      if (Array.isArray(vodStreams) && Array.isArray(vodCats)) {
+        const vodCatMap = new Map(vodCats.map((c: any) => [String(c.category_id), c.category_name]));
+        for (const s of vodStreams) {
+          channels.push({
+            id: `vod-${s.stream_id}`, name: s.name,
+            url: `${base}/movie/${creds.username}/${creds.password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+            logo: s.stream_icon || undefined,
+            group: vodCatMap.get(String(s.category_id)) || 'Movies',
+            type: 'movie' as const,
+          });
+        }
       }
-    }
-    throw new Error(`Direct API returned ${catsRes.status}/${streamsRes.status}`);
+    } catch { /* VOD is optional */ }
+
+    // Series (optional)
+    try {
+      const [serCats, serList] = await Promise.all([
+        browserFetch(api('get_series_categories')),
+        browserFetch(api('get_series')),
+      ]);
+      if (Array.isArray(serList) && Array.isArray(serCats)) {
+        const serCatMap = new Map(serCats.map((c: any) => [String(c.category_id), c.category_name]));
+        for (const s of serList) {
+          channels.push({
+            id: `ser-${s.series_id}`, name: s.name, url: '',
+            logo: s.cover || undefined,
+            group: serCatMap.get(String(s.category_id)) || 'Series',
+            type: 'series' as const,
+          });
+        }
+      }
+    } catch { /* Series is optional */ }
+
+    const categories = Array.from(new Set(channels.map(c => c.group!).filter(Boolean))).sort();
+    return { channels, categories };
+
   } catch (directErr) {
-    console.warn('Direct browser fetch failed, trying edge function:', directErr);
+    console.warn('Browser direct Xtream fetch failed:', directErr);
   }
 
   // 2) Fallback: Edge Function
-  const { data, error } = await supabase.functions.invoke('parse-playlist', {
-    body: { type: 'xtream', server: creds.server, username: creds.username, password: creds.password },
-  });
-
-  if (error) throw error;
-  if (data?.ok === false) throw new Error(data.error || 'Provider error');
-  return data as ParsedPlaylist;
+  try {
+    const data = await edgeFetch({
+      type: 'xtream',
+      server: creds.server,
+      username: creds.username,
+      password: creds.password,
+    });
+    return data as ParsedPlaylist;
+  } catch (edgeErr) {
+    throw new Error(
+      `فشل الاتصال بالمزود.\n\n` +
+      `السبب المحتمل: التطبيق يعمل على HTTPS والمزود على HTTP (محتوى مختلط).\n\n` +
+      `الحل: حمّل ملف M3U من الزر أدناه وارفعه في تبويب "File".`
+    );
+  }
 }
