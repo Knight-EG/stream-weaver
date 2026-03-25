@@ -252,6 +252,19 @@ export default function Index() {
               </div>
             )}
 
+            {/* Playlist Switcher */}
+            <div className="p-2 border-t border-border">
+              <button
+                onClick={() => setShowPlaylistManager(true)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 tv-focusable"
+                data-focusable="true"
+              >
+                <List className="w-4 h-4" />
+                <span className="flex-1 text-start">Playlists</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{getSavedPlaylists().length}</span>
+              </button>
+            </div>
+
             {/* Quick Links */}
             <div className="p-2 border-t border-border space-y-1 mt-auto">
               {[
