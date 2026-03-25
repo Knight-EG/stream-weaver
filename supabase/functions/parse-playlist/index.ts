@@ -24,10 +24,21 @@ class PlaylistProviderError extends Error {
   }
 }
 
-const upstreamHeaders = {
-  'Accept': 'application/json, text/plain, */*',
-  'User-Agent': 'Mozilla/5.0 (compatible; LovablePlaylistParser/1.0; +https://lovable.dev)',
-};
+// Use User-Agent strings that mimic common IPTV apps to avoid provider blocks
+const userAgents = [
+  'IPTVSmarters/1.0',
+  'TiviMate/4.5.0',
+  'okhttp/4.9.3',
+  'Dalvik/2.1.0 (Linux; U; Android 12)',
+];
+
+function getUpstreamHeaders(agentIndex = 0): Record<string, string> {
+  return {
+    'Accept': '*/*',
+    'User-Agent': userAgents[agentIndex % userAgents.length],
+    'Connection': 'keep-alive',
+  };
+}
 
 function isTlsCertificateError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -65,12 +76,14 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-async function fetchUpstreamText(url: string): Promise<{ response: Response; text: string }> {
+async function fetchUpstreamText(url: string, agentIndex = 0): Promise<{ response: Response; text: string }> {
+  const headers = getUpstreamHeaders(agentIndex);
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
     const response = await fetch(url, {
-      headers: upstreamHeaders,
+      headers,
       redirect: 'follow',
       signal: controller.signal,
     });
@@ -86,7 +99,7 @@ async function fetchUpstreamText(url: string): Promise<{ response: Response; tex
       const controller2 = new AbortController();
       const timeout2 = setTimeout(() => controller2.abort(), 25000);
       const response = await fetch(httpFallbackUrl, {
-        headers: upstreamHeaders,
+        headers,
         redirect: 'follow',
         signal: controller2.signal,
       });
@@ -98,6 +111,28 @@ async function fetchUpstreamText(url: string): Promise<{ response: Response; tex
 
     throw error;
   }
+}
+
+// Try fetching with multiple User-Agent strings until one works
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<{ response: Response; text: string }> {
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const result = await fetchUpstreamText(url, i);
+      // If we got a 403, try next User-Agent
+      if (result.response.status === 403 && i < maxRetries - 1) {
+        console.log(`Got 403 with agent ${i}, trying next User-Agent...`);
+        continue;
+      }
+      return result;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Fetch attempt ${i + 1} failed:`, lastError.message);
+    }
+  }
+
+  throw lastError || new Error('All fetch attempts failed');
 }
 
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
@@ -121,8 +156,8 @@ function parseM3U(content: string): { channels: Channel[]; categories: string[] 
 
     let type: 'live' | 'movie' | 'series' = 'live';
     const lowerGroup = group.toLowerCase();
-    if (lowerGroup.includes('movie') || lowerGroup.includes('vod')) type = 'movie';
-    else if (lowerGroup.includes('series')) type = 'series';
+    if (lowerGroup.includes('movie') || lowerGroup.includes('vod') || lowerGroup.includes('film') || lowerGroup.includes('أفلام')) type = 'movie';
+    else if (lowerGroup.includes('series') || lowerGroup.includes('مسلسل')) type = 'series';
 
     channels.push({
       id: `ch-${channels.length}`,
@@ -135,6 +170,24 @@ function parseM3U(content: string): { channels: Channel[]; categories: string[] 
   }
 
   return { channels, categories: Array.from(categorySet).sort() };
+}
+
+function buildXtreamBase(server: string): string {
+  let base = server.replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(base)) {
+    base = 'http://' + base;
+  }
+  return base;
+}
+
+// Build Xtream URL preserving original credential casing
+function buildXtreamUrl(base: string, username: string, password: string, action?: string): string {
+  // Use credentials as-is (case-sensitive) - do NOT lowercase
+  const params = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  if (action) {
+    return `${base}/player_api.php?${params}&action=${action}`;
+  }
+  return `${base}/player_api.php?${params}`;
 }
 
 Deno.serve(async (req) => {
@@ -164,10 +217,67 @@ Deno.serve(async (req) => {
     const { type, url, username, password, server } = body;
 
     if (!type) {
-      return jsonResponse({ error: 'Missing type (m3u or xtream)' }, 400);
+      return jsonResponse({ error: 'Missing type (m3u, xtream, or xtream_account_info)' }, 400);
     }
 
-    // Check cache
+    // === Xtream Account Info (no caching) ===
+    if (type === 'xtream_account_info') {
+      if (!server || !username || !password) {
+        return jsonResponse({ error: 'Missing xtream credentials' }, 400);
+      }
+      const base = buildXtreamBase(server);
+      const accountUrl = buildXtreamUrl(base, username, password);
+      
+      try {
+        const { response, text } = await fetchWithRetry(accountUrl);
+        if (!response.ok) {
+          return jsonResponse({ 
+            ok: false, 
+            error: `Provider returned ${response.status}`,
+            account: { username, status: 'Unknown', expDate: null, isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null }
+          });
+        }
+
+        const data = safeJsonParse<any>(text);
+        const info = data.user_info || {};
+        
+        let expDate: string | null = null;
+        if (info.exp_date) {
+          const ts = parseInt(info.exp_date, 10);
+          if (!isNaN(ts)) expDate = new Date(ts * 1000).toISOString();
+        }
+
+        let createdAt: string | null = null;
+        if (info.created_at) {
+          const ts = parseInt(info.created_at, 10);
+          if (!isNaN(ts)) createdAt = new Date(ts * 1000).toISOString();
+        }
+
+        return jsonResponse({
+          ok: true,
+          account: {
+            username: info.username || username,
+            status: info.status || 'Unknown',
+            expDate,
+            isTrial: info.is_trial === '1' || info.is_trial === true,
+            activeCons: parseInt(info.active_cons, 10) || 0,
+            maxConnections: parseInt(info.max_connections, 10) || 1,
+            createdAt,
+            message: info.message || undefined,
+          },
+          serverInfo: data.server_info || null,
+        });
+      } catch (err) {
+        console.warn('Xtream account info fetch failed:', err);
+        return jsonResponse({ 
+          ok: false, 
+          error: err instanceof Error ? err.message : 'Failed to fetch account info',
+          account: { username, status: 'Unknown', expDate: null, isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null }
+        });
+      }
+    }
+
+    // === Check cache for playlist types ===
     const cacheKey = type === 'm3u' ? url : `${server}:${username}`;
     const { data: cached } = await supabase
       .from('playlist_cache')
@@ -187,54 +297,114 @@ Deno.serve(async (req) => {
       if (!url) {
         return jsonResponse({ error: 'Missing url' }, 400);
       }
-      const { response, text } = await fetchUpstreamText(url);
+      const { response, text } = await fetchWithRetry(url);
       if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.status}`);
       result = parseM3U(text);
     } else if (type === 'xtream') {
       if (!server || !username || !password) {
         return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
-      let base = server.replace(/\/$/, '');
-      if (!/^https?:\/\//i.test(base)) {
-        base = 'http://' + base;
-      }
-      const [catsRes, streamsRes] = await Promise.all([
-        fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`),
-        fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`),
-      ]);
+      const base = buildXtreamBase(server);
 
-      const apiWorked = catsRes.response.ok && streamsRes.response.ok;
+      // Try API endpoints with retry (different User-Agents)
+      let apiWorked = false;
+      try {
+        const [catsRes, streamsRes] = await Promise.all([
+          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_categories')),
+          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_streams')),
+        ]);
 
-      if (apiWorked) {
-        const categories = safeJsonParse<any[]>(catsRes.text);
-        const streams = safeJsonParse<any[]>(streamsRes.text);
+        apiWorked = catsRes.response.ok && streamsRes.response.ok;
 
-        if (Array.isArray(categories) && Array.isArray(streams)) {
-          const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
-          const channels: Channel[] = streams.map((s: any) => ({
-            id: `xt-${s.stream_id}`,
-            name: s.name,
-            url: `${base}/live/${username}/${password}/${s.stream_id}.m3u8`,
-            logo: s.stream_icon || undefined,
-            group: catMap.get(s.category_id) || 'Uncategorized',
-            type: 'live' as const,
-          }));
-          result = {
-            channels,
-            categories: Array.from(new Set(channels.map(c => c.group!))).filter(Boolean).sort(),
-          };
+        if (apiWorked) {
+          const categories = safeJsonParse<any[]>(catsRes.text);
+          const streams = safeJsonParse<any[]>(streamsRes.text);
+
+          if (Array.isArray(categories) && Array.isArray(streams)) {
+            const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
+
+            // Also fetch VOD and series categories/streams
+            let vodChannels: Channel[] = [];
+            let seriesChannels: Channel[] = [];
+
+            try {
+              const [vodCatsRes, vodStreamsRes] = await Promise.all([
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_categories')),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_streams')),
+              ]);
+              if (vodCatsRes.response.ok && vodStreamsRes.response.ok) {
+                const vodCats = safeJsonParse<any[]>(vodCatsRes.text);
+                const vodStreams = safeJsonParse<any[]>(vodStreamsRes.text);
+                if (Array.isArray(vodCats) && Array.isArray(vodStreams)) {
+                  const vodCatMap = new Map(vodCats.map((c: any) => [c.category_id, c.category_name]));
+                  vodChannels = vodStreams.map((s: any) => ({
+                    id: `vod-${s.stream_id}`,
+                    name: s.name,
+                    url: `${base}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+                    logo: s.stream_icon || undefined,
+                    group: vodCatMap.get(s.category_id) || 'VOD',
+                    type: 'movie' as const,
+                  }));
+                }
+              }
+            } catch { /* VOD fetch optional */ }
+
+            try {
+              const [serCatsRes, serStreamsRes] = await Promise.all([
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series_categories')),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series')),
+              ]);
+              if (serCatsRes.response.ok && serStreamsRes.response.ok) {
+                const serCats = safeJsonParse<any[]>(serCatsRes.text);
+                const serStreams = safeJsonParse<any[]>(serStreamsRes.text);
+                if (Array.isArray(serCats) && Array.isArray(serStreams)) {
+                  const serCatMap = new Map(serCats.map((c: any) => [c.category_id, c.category_name]));
+                  seriesChannels = serStreams.map((s: any) => ({
+                    id: `ser-${s.series_id}`,
+                    name: s.name,
+                    url: '', // Series need episode lookup
+                    logo: s.cover || undefined,
+                    group: serCatMap.get(s.category_id) || 'Series',
+                    type: 'series' as const,
+                  }));
+                }
+              }
+            } catch { /* Series fetch optional */ }
+
+            const liveChannels: Channel[] = streams.map((s: any) => ({
+              id: `xt-${s.stream_id}`,
+              name: s.name,
+              url: `${base}/live/${username}/${password}/${s.stream_id}.m3u8`,
+              logo: s.stream_icon || undefined,
+              group: catMap.get(s.category_id) || 'Uncategorized',
+              type: 'live' as const,
+            }));
+
+            const allChannels = [...liveChannels, ...vodChannels, ...seriesChannels];
+            result = {
+              channels: allChannels,
+              categories: Array.from(new Set(allChannels.map(c => c.group!))).filter(Boolean).sort(),
+            };
+          }
         }
+      } catch (err) {
+        console.warn('Xtream API calls failed:', err instanceof Error ? err.message : err);
       }
 
-      // Fallback: fetch as M3U playlist if API failed
+      // Fallback: fetch as M3U playlist
       if (!result) {
         console.log('Xtream API failed, falling back to M3U format');
         const m3uUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
-        const m3uRes = await fetchUpstreamText(m3uUrl);
-        if (!m3uRes.response.ok) {
-          throw new PlaylistProviderError('PROVIDER_BLOCKED', `Xtream provider blocked both API and M3U requests (${m3uRes.response.status}). The provider may be restricting server access. Try using M3U URL directly.`);
+        try {
+          const m3uRes = await fetchWithRetry(m3uUrl);
+          if (!m3uRes.response.ok) {
+            throw new PlaylistProviderError('PROVIDER_BLOCKED', `Xtream provider blocked both API and M3U requests (${m3uRes.response.status}). The provider may be restricting server access.\n\nTips:\n1. Make sure username/password are exactly correct (case-sensitive)\n2. Try downloading the M3U file from your provider and uploading it directly\n3. Your provider may block cloud server IPs`);
+          }
+          result = parseM3U(m3uRes.text);
+        } catch (err) {
+          if (err instanceof PlaylistProviderError) throw err;
+          throw new PlaylistProviderError('PROVIDER_BLOCKED', `Could not connect to Xtream provider. The provider may block cloud server IPs.\n\nTips:\n1. Try uploading an M3U file directly\n2. Check your credentials are correct (case-sensitive)`);
         }
-        result = parseM3U(m3uRes.text);
       }
     } else {
       return jsonResponse({ error: 'Invalid type' }, 400);
