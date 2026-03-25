@@ -292,6 +292,9 @@ export default function Admin() {
 
       {/* Branding Tab */}
       {tab === 'branding' && <WhiteLabelSettings />}
+
+      {/* Trial Tab */}
+      {tab === 'trial' && <TrialSettings />}
     </div>
   );
 }
