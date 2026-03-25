@@ -9,6 +9,7 @@ export interface AccessCheck {
   subscription?: {
     status: string;
     expiresAt: string;
+    planType?: string;
   };
   device?: {
     id: string;
