@@ -88,6 +88,8 @@ export default function Index() {
                 <NotificationBell />
                 <Link to="/settings" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title={t('settings')}><User className="w-4 h-4" /></Link>
                 <Link to="/reseller" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title="Reseller"><Store className="w-4 h-4" /></Link>
+                <Link to="/movies" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title={t('moviesTitle')}><Film className="w-4 h-4" /></Link>
+                <Link to="/series" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title={t('seriesTitle')}><Tv className="w-4 h-4" /></Link>
                 <Link to="/admin" className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title="Admin"><Settings className="w-4 h-4" /></Link>
                 <button onClick={() => setSidebarOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true"><X className="w-4 h-4" /></button>
               </div>

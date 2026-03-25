@@ -76,6 +76,18 @@ export async function checkAccess(): Promise<AccessCheck> {
     };
   }
 
+  // Account sharing detection
+  const sharingCheck = await detectAccountSharing();
+  if (sharingCheck.suspicious && sharingCheck.action === 'block') {
+    return {
+      allowed: false,
+      reason: sharingCheck.reason || 'Account sharing detected. Only 1 device allowed per account.',
+      trialActive,
+      trialDaysLeft,
+      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
+    };
+  }
+
   return {
     allowed: true,
     trialActive: trialActive && !hasActiveSubscription,
