@@ -14,6 +14,16 @@ interface Channel {
   type: 'live' | 'movie' | 'series';
 }
 
+class PlaylistProviderError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'PlaylistProviderError';
+  }
+}
+
 const upstreamHeaders = {
   'Accept': 'application/json, text/plain, */*',
   'User-Agent': 'Mozilla/5.0 (compatible; LovablePlaylistParser/1.0; +https://lovable.dev)',
@@ -30,10 +40,17 @@ function safeJsonParse<T>(content: string): T {
   } catch {
     const snippet = content.slice(0, 160).replace(/\s+/g, ' ').trim();
     if (looksLikeHtml(content)) {
-      throw new Error(`Xtream provider returned HTML instead of JSON. It may be blocking remote requests or the server URL/credentials are invalid. Response preview: ${snippet}`);
+      throw new PlaylistProviderError('UPSTREAM_INVALID_RESPONSE', `Xtream provider returned HTML instead of JSON. It may be blocking remote requests or the server URL/credentials are invalid. Response preview: ${snippet}`);
     }
-    throw new Error(`Xtream provider returned invalid JSON. Response preview: ${snippet}`);
+    throw new PlaylistProviderError('UPSTREAM_INVALID_RESPONSE', `Xtream provider returned invalid JSON. Response preview: ${snippet}`);
   }
+}
+
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 }
 
 async function fetchUpstreamText(url: string): Promise<{ response: Response; text: string }> {
@@ -91,7 +108,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
     const supabase = createClient(
@@ -102,7 +119,7 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
     const userId = user.id;
@@ -110,7 +127,7 @@ Deno.serve(async (req) => {
     const { type, url, username, password, server } = body;
 
     if (!type) {
-      return new Response(JSON.stringify({ error: 'Missing type (m3u or xtream)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Missing type (m3u or xtream)' }, 400);
     }
 
     // Check cache
@@ -124,14 +141,14 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (cached) {
-      return new Response(JSON.stringify(cached.data), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(cached.data);
     }
 
     let result;
 
     if (type === 'm3u') {
       if (!url) {
-        return new Response(JSON.stringify({ error: 'Missing url' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return jsonResponse({ error: 'Missing url' }, 400);
       }
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.status}`);
@@ -139,7 +156,7 @@ Deno.serve(async (req) => {
       result = parseM3U(text);
     } else if (type === 'xtream') {
       if (!server || !username || !password) {
-        return new Response(JSON.stringify({ error: 'Missing xtream credentials' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
       let base = server.replace(/\/$/, '');
       if (!/^https?:\/\//i.test(base)) {
@@ -179,12 +196,12 @@ Deno.serve(async (req) => {
         const m3uUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
         const m3uRes = await fetchUpstreamText(m3uUrl);
         if (!m3uRes.response.ok) {
-          throw new Error(`Xtream provider blocked both API and M3U requests (${m3uRes.response.status}). The provider may be restricting server access. Try using M3U URL directly.`);
+          throw new PlaylistProviderError('PROVIDER_BLOCKED', `Xtream provider blocked both API and M3U requests (${m3uRes.response.status}). The provider may be restricting server access. Try using M3U URL directly.`);
         }
         result = parseM3U(m3uRes.text);
       }
     } else {
-      return new Response(JSON.stringify({ error: 'Invalid type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Invalid type' }, 400);
     }
 
     // Save to cache
@@ -198,10 +215,15 @@ Deno.serve(async (req) => {
       expires_at: new Date(Date.now() + 3600000).toISOString(),
     }, { onConflict: 'user_id,cache_key' });
 
-    return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse(result);
   } catch (error) {
+    if (error instanceof PlaylistProviderError) {
+      console.warn('parse-playlist upstream warning:', error.code, error.message);
+      return jsonResponse({ ok: false, code: error.code, error: error.message });
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('parse-playlist failed:', message);
-    return new Response(JSON.stringify({ error: message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse({ error: message }, 500);
   }
 });
