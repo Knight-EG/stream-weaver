@@ -148,9 +148,24 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
       video.addEventListener('error', () => retryWithBackoff(retryCount), { once: true });
     }
 
+    // Save resume position periodically
+    const chId = channelId || `ch-${activeUrl}`;
+    saveInterval.current = window.setInterval(() => {
+      const v = videoRef.current;
+      if (v && v.currentTime > 5 && !v.paused) {
+        saveResumePosition(chId, title || '', activeUrl, v.currentTime, v.duration || undefined);
+      }
+    }, 15000);
+
     return () => {
+      // Save final position on unmount
+      const v = videoRef.current;
+      if (v && v.currentTime > 5) {
+        saveResumePosition(chId, title || '', activeUrl, v.currentTime, v.duration || undefined);
+      }
       hlsRef.current?.destroy();
       clearTimeout(retryTimer.current);
+      clearInterval(saveInterval.current);
       endSession();
     };
   }, [resolvedUrl, retryCount]);
