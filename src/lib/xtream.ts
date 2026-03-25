@@ -57,9 +57,28 @@ function toIsoDate(value: unknown): string | null {
   return Number.isNaN(ts) ? null : new Date(ts * 1000).toISOString();
 }
 
+/** Check if we need a CORS proxy (running on HTTPS but target is HTTP) */
+function needsProxy(): boolean {
+  if (typeof window === 'undefined') return false;
+  const proto = window.location.protocol;
+  // On HTTP, file://, or localhost — direct connection works fine
+  return proto === 'https:';
+}
+
+const CORS_PROXIES = [
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
+/** Wrap URL with CORS proxy if needed (HTTPS → HTTP) */
+function proxyUrl(url: string): string {
+  if (!needsProxy()) return url;
+  return CORS_PROXIES[0](url);
+}
+
 /**
- * Direct browser fetch — all Xtream connections happen from the user's device.
- * No server proxy involved.
+ * Fetch from user's browser. Uses CORS proxy automatically when on HTTPS.
+ * On TV/HTTP — connects directly without any proxy.
  */
 async function directFetch(url: string, timeoutMs = 20000): Promise<any> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
