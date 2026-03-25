@@ -499,6 +499,16 @@ const ar: TranslationKeys = {
   couponActive: 'نشط',
   couponExpired: 'منتهي',
   
+  moviesTitle: 'الأفلام',
+  moviesSearchPlaceholder: 'ابحث عن الأفلام...',
+  moviesEmpty: 'لا توجد أفلام',
+  seriesTitle: 'المسلسلات',
+  seriesSearchPlaceholder: 'ابحث عن المسلسلات...',
+  seriesEmpty: 'لا توجد مسلسلات',
+  allCategories: 'الكل',
+  sortByName: 'ترتيب بالاسم',
+  sortByCategory: 'ترتيب بالتصنيف',
+  
   timeJustNow: 'الآن',
   timeMinAgo: 'دقيقة مضت',
   timeHoursAgo: 'ساعة مضت',
