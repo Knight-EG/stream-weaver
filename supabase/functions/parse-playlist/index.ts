@@ -11,66 +11,8 @@ interface Channel {
   url: string;
   logo?: string;
   group?: string;
+  tvgId?: string;
   type: 'live' | 'movie' | 'series';
-}
-
-class PlaylistProviderError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-    this.name = 'PlaylistProviderError';
-  }
-}
-
-// User-Agent strings starting with IPTVSmartersPro (most accepted by providers)
-const userAgents = [
-  'IPTVSmartersPro',
-  'IPTVSmarts',
-  'VLC/3.0.20 LibVLC/3.0.20',
-  'Lavf/60.16.100',
-  'Kodi/20.2 (Linux; Android 12) Kodi/20.2',
-  'okhttp/4.12.0',
-  'Dalvik/2.1.0 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014)',
-  'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.5) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.0 Chrome/85.0.4183.93 TV Safari/537.36',
-];
-
-// Clean headers — NO X-Forwarded-For or X-Real-IP (firewalls detect these)
-function getUpstreamHeaders(agentIndex: number): Record<string, string> {
-  return {
-    'Accept': '*/*',
-    'User-Agent': userAgents[agentIndex % userAgents.length],
-    'Connection': 'keep-alive',
-  };
-}
-
-function isTlsCertificateError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const lower = message.toLowerCase();
-  return lower.includes('invalid peer certificate')
-    || lower.includes('causedasendentity')
-    || lower.includes('certificate subject name');
-}
-
-function toHttpUrl(url: string): string | null {
-  return url.startsWith('https://') ? `http://${url.slice('https://'.length)}` : null;
-}
-
-function looksLikeHtml(content: string): boolean {
-  const trimmed = content.trim().toLowerCase();
-  return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.startsWith('<body') || trimmed.startsWith('<');
-}
-
-function safeJsonParse<T>(content: string): T {
-  try {
-    return JSON.parse(content) as T;
-  } catch {
-    const snippet = content.slice(0, 160).replace(/\s+/g, ' ').trim();
-    if (looksLikeHtml(content)) {
-      throw new PlaylistProviderError('UPSTREAM_INVALID_RESPONSE', `Xtream provider returned HTML instead of JSON. Response preview: ${snippet}`);
-    }
-    throw new PlaylistProviderError('UPSTREAM_INVALID_RESPONSE', `Xtream provider returned invalid JSON. Response preview: ${snippet}`);
-  }
 }
 
 function jsonResponse(payload: unknown, status = 200) {
@@ -80,90 +22,32 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-async function fetchUpstreamText(url: string, agentIndex: number): Promise<{ response: Response; text: string }> {
-  const headers = getUpstreamHeaders(agentIndex);
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
-    const response = await fetch(url, { headers, redirect: 'follow', signal: controller.signal });
-    clearTimeout(timeout);
-    const text = await response.text();
-    return { response, text };
-  } catch (error) {
-    const httpFallbackUrl = toHttpUrl(url);
-    if (httpFallbackUrl && (isTlsCertificateError(error) || (error instanceof DOMException && error.name === 'AbortError'))) {
-      console.warn(`Fetch failed for ${url}, retrying over HTTP.`);
-      const controller2 = new AbortController();
-      const timeout2 = setTimeout(() => controller2.abort(), 25000);
-      const response = await fetch(httpFallbackUrl, { headers, redirect: 'follow', signal: controller2.signal });
-      clearTimeout(timeout2);
-      const text = await response.text();
-      return { response, text };
-    }
-    throw error;
-  }
+function buildBase(server: string): string {
+  let base = server.replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
+  return base;
 }
 
-// Free CORS proxies to try when direct fetch gets 403 (datacenter IP blocked)
-const corsProxies = [
-  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-];
-
-// Try direct fetch with multiple User-Agents, then fallback to CORS proxies
-async function fetchWithRetry(url: string): Promise<{ response: Response; text: string }> {
-  let lastError: Error | null = null;
-
-  // Phase 1: Try direct with different User-Agents (max 3 to save time)
-  const directTries = Math.min(3, userAgents.length);
-  for (let i = 0; i < directTries; i++) {
-    try {
-      const result = await fetchUpstreamText(url, i);
-      if (result.response.status === 403 && i < directTries - 1) {
-        console.log(`Got 403 with agent ${i} (${userAgents[i]}), trying next...`);
-        continue;
-      }
-      if (result.response.ok) return result;
-      // If last direct attempt still 403, move to proxy phase
-      if (result.response.status === 403) {
-        console.log('All direct attempts got 403, trying CORS proxies...');
-        break;
-      }
-      return result;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`Direct attempt ${i + 1} failed:`, lastError.message);
-    }
+async function xtreamFetch(url: string): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'IPTVSmartersPro',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+      },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
   }
-
-  // Phase 2: Try CORS proxies
-  for (let p = 0; p < corsProxies.length; p++) {
-    const proxiedUrl = corsProxies[p](url);
-    try {
-      console.log(`Trying CORS proxy ${p + 1}...`);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
-      const response = await fetch(proxiedUrl, {
-        headers: { 'Accept': '*/*' },
-        redirect: 'follow',
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      const text = await response.text();
-      
-      if (response.ok && text.length > 10 && !looksLikeHtml(text)) {
-        console.log(`CORS proxy ${p + 1} succeeded!`);
-        return { response, text };
-      }
-      console.log(`CORS proxy ${p + 1} returned ${response.status}, content looks ${looksLikeHtml(text) ? 'HTML' : 'OK'}`);
-    } catch (err) {
-      console.warn(`CORS proxy ${p + 1} failed:`, err instanceof Error ? err.message : err);
-    }
-  }
-
-  throw lastError || new Error('All fetch attempts (direct + proxy) failed');
 }
 
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
@@ -196,19 +80,6 @@ function parseM3U(content: string): { channels: Channel[]; categories: string[] 
   return { channels, categories: Array.from(categorySet).sort() };
 }
 
-function buildXtreamBase(server: string): string {
-  let base = server.replace(/\/$/, '');
-  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
-  return base;
-}
-
-// Simple URL builder — no unnecessary encoding (fixes 400 errors on old Xtream panels)
-function buildXtreamUrl(base: string, username: string, password: string, action?: string): string {
-  const params = `username=${username}&password=${password}`;
-  if (action) return `${base}/player_api.php?${params}&action=${action}`;
-  return `${base}/player_api.php?${params}`;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -233,10 +104,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { type, url, username, password, server } = body;
 
-    console.log(`Request type=${type}, server=${server || url || 'n/a'}`);
+    console.log(`Request type=${type}`);
 
     if (!type) {
-      return jsonResponse({ error: 'Missing type (m3u, xtream, or xtream_account_info)' }, 400);
+      return jsonResponse({ error: 'Missing type' }, 400);
     }
 
     // === Xtream Account Info ===
@@ -244,22 +115,12 @@ Deno.serve(async (req) => {
       if (!server || !username || !password) {
         return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
-      const base = buildXtreamBase(server);
-      const accountUrl = buildXtreamUrl(base, username, password);
+      const base = buildBase(server);
+      const apiUrl = `${base}/player_api.php?username=${username}&password=${password}`;
 
       try {
-        const { response, text } = await fetchWithRetry(accountUrl);
-        if (!response.ok) {
-          console.warn(`Account info returned ${response.status}, body: ${text.slice(0, 200)}`);
-          return jsonResponse({
-            ok: false,
-            error: `Provider returned ${response.status}`,
-            account: { username, status: 'Unknown', expDate: null, isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null }
-          });
-        }
-
-        const data = safeJsonParse<any>(text);
-        const info = data.user_info || {};
+        const data = await xtreamFetch(apiUrl);
+        const info = data?.user_info || {};
         const toIso = (v: any) => { const ts = parseInt(v, 10); return isNaN(ts) ? null : new Date(ts * 1000).toISOString(); };
 
         return jsonResponse({
@@ -277,10 +138,10 @@ Deno.serve(async (req) => {
           serverInfo: data.server_info || null,
         });
       } catch (err) {
-        console.warn('Xtream account info fetch failed:', err);
+        console.warn('Account info failed:', err instanceof Error ? err.message : err);
         return jsonResponse({
           ok: false,
-          error: err instanceof Error ? err.message : 'Failed to fetch account info',
+          error: err instanceof Error ? err.message : 'Connection failed',
           account: { username, status: 'Unknown', expDate: null, isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null }
         });
       }
@@ -296,125 +157,122 @@ Deno.serve(async (req) => {
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
 
-    if (cached) return jsonResponse(cached.data);
+    if (cached) {
+      console.log(`Cache hit for ${cacheKey}, ${cached.channel_count} channels`);
+      return jsonResponse(cached.data);
+    }
 
-    let result;
+    let result: { channels: Channel[]; categories: string[] };
 
     if (type === 'm3u') {
       if (!url) return jsonResponse({ error: 'Missing url' }, 400);
-      const { response, text } = await fetchWithRetry(url);
-      if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.status}`);
-      result = parseM3U(text);
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'IPTVSmartersPro' },
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new Error(`Failed to fetch M3U: ${res.status}`);
+      result = parseM3U(await res.text());
+
     } else if (type === 'xtream') {
-      if (!server || !username || !password) return jsonResponse({ error: 'Missing xtream credentials' }, 400);
-      const base = buildXtreamBase(server);
-
-      let apiWorked = false;
-      try {
-        const [catsRes, streamsRes] = await Promise.all([
-          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_categories')),
-          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_streams')),
-        ]);
-
-        apiWorked = catsRes.response.ok && streamsRes.response.ok;
-
-        if (apiWorked) {
-          const categories = safeJsonParse<any[]>(catsRes.text);
-          const streams = safeJsonParse<any[]>(streamsRes.text);
-
-          if (Array.isArray(categories) && Array.isArray(streams)) {
-            const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
-
-            let vodChannels: Channel[] = [];
-            let seriesChannels: Channel[] = [];
-
-            try {
-              const [vodCatsRes, vodStreamsRes] = await Promise.all([
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_categories')),
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_streams')),
-              ]);
-              if (vodCatsRes.response.ok && vodStreamsRes.response.ok) {
-                const vodCats = safeJsonParse<any[]>(vodCatsRes.text);
-                const vodStreams = safeJsonParse<any[]>(vodStreamsRes.text);
-                if (Array.isArray(vodCats) && Array.isArray(vodStreams)) {
-                  const vodCatMap = new Map(vodCats.map((c: any) => [c.category_id, c.category_name]));
-                  vodChannels = vodStreams.map((s: any) => ({
-                    id: `vod-${s.stream_id}`, name: s.name,
-                    url: `${base}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
-                    logo: s.stream_icon || undefined, group: vodCatMap.get(s.category_id) || 'VOD', type: 'movie' as const,
-                  }));
-                }
-              }
-            } catch { /* optional */ }
-
-            try {
-              const [serCatsRes, serStreamsRes] = await Promise.all([
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series_categories')),
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series')),
-              ]);
-              if (serCatsRes.response.ok && serStreamsRes.response.ok) {
-                const serCats = safeJsonParse<any[]>(serCatsRes.text);
-                const serStreams = safeJsonParse<any[]>(serStreamsRes.text);
-                if (Array.isArray(serCats) && Array.isArray(serStreams)) {
-                  const serCatMap = new Map(serCats.map((c: any) => [c.category_id, c.category_name]));
-                  seriesChannels = serStreams.map((s: any) => ({
-                    id: `ser-${s.series_id}`, name: s.name, url: '',
-                    logo: s.cover || undefined, group: serCatMap.get(s.category_id) || 'Series', type: 'series' as const,
-                  }));
-                }
-              }
-            } catch { /* optional */ }
-
-            const liveChannels: Channel[] = streams.map((s: any) => ({
-              id: `xt-${s.stream_id}`, name: s.name,
-              url: `${base}/live/${username}/${password}/${s.stream_id}.ts`,
-              logo: s.stream_icon || undefined, group: catMap.get(s.category_id) || 'Uncategorized', type: 'live' as const,
-            }));
-
-            const allChannels = [...liveChannels, ...vodChannels, ...seriesChannels];
-            result = { channels: allChannels, categories: Array.from(new Set(allChannels.map(c => c.group!))).filter(Boolean).sort() };
-          }
-        }
-      } catch (err) {
-        console.warn('Xtream API failed:', err instanceof Error ? err.message : err);
+      if (!server || !username || !password) {
+        return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       }
+      const base = buildBase(server);
+      const api = `${base}/player_api.php?username=${username}&password=${password}`;
 
-      // Fallback: M3U
-      if (!result) {
-        console.log('Xtream API failed, falling back to M3U format');
-        const m3uUrl = `${base}/get.php?username=${username}&password=${password}&type=m3u_plus&output=ts`;
-        try {
-          const m3uRes = await fetchWithRetry(m3uUrl);
-          if (!m3uRes.response.ok) {
-            throw new PlaylistProviderError('PROVIDER_BLOCKED',
-              `المزود رفض الاتصال (${m3uRes.response.status}). قد يكون المزود يحجب عناوين IP الخاصة بالخوادم السحابية.\n\nالحلول:\n1. تأكد أن اسم المستخدم وكلمة المرور صحيحة\n2. حمّل ملف M3U من المزود وارفعه مباشرة\n3. تواصل مع المزود لفتح الوصول`);
-          }
-          result = parseM3U(m3uRes.text);
-        } catch (err) {
-          if (err instanceof PlaylistProviderError) throw err;
-          throw new PlaylistProviderError('PROVIDER_BLOCKED',
-            `تعذر الاتصال بمزود الخدمة.\n\nالحلول:\n1. ارفع ملف M3U مباشرة\n2. تأكد من صحة البيانات`);
+      // Fetch all data in parallel
+      console.log('Fetching Xtream data via player_api.php...');
+
+      const [liveCats, liveStreams, vodCats, vodStreams, serCats, serList] = await Promise.all([
+        xtreamFetch(`${api}&action=get_live_categories`).catch(() => []),
+        xtreamFetch(`${api}&action=get_live_streams`).catch(() => []),
+        xtreamFetch(`${api}&action=get_vod_categories`).catch(() => []),
+        xtreamFetch(`${api}&action=get_vod_streams`).catch(() => []),
+        xtreamFetch(`${api}&action=get_series_categories`).catch(() => []),
+        xtreamFetch(`${api}&action=get_series`).catch(() => []),
+      ]);
+
+      console.log(`Live: ${Array.isArray(liveStreams) ? liveStreams.length : 0}, VOD: ${Array.isArray(vodStreams) ? vodStreams.length : 0}, Series: ${Array.isArray(serList) ? serList.length : 0}`);
+
+      const channels: Channel[] = [];
+
+      // Live channels
+      if (Array.isArray(liveStreams) && Array.isArray(liveCats)) {
+        const catMap = new Map(liveCats.map((c: any) => [String(c.category_id), c.category_name || 'Live']));
+        for (const s of liveStreams) {
+          if (!s.stream_id) continue;
+          channels.push({
+            id: `xt-${s.stream_id}`,
+            name: s.name || `Channel ${s.stream_id}`,
+            url: `${base}/live/${username}/${password}/${s.stream_id}.ts`,
+            logo: s.stream_icon || undefined,
+            group: catMap.get(String(s.category_id)) || 'Live',
+            tvgId: s.epg_channel_id || undefined,
+            type: 'live',
+          });
         }
       }
+
+      // VOD / Movies
+      if (Array.isArray(vodStreams) && Array.isArray(vodCats)) {
+        const catMap = new Map(vodCats.map((c: any) => [String(c.category_id), c.category_name || 'Movies']));
+        for (const s of vodStreams) {
+          if (!s.stream_id) continue;
+          channels.push({
+            id: `vod-${s.stream_id}`,
+            name: s.name || `Movie ${s.stream_id}`,
+            url: `${base}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+            logo: s.stream_icon || undefined,
+            group: catMap.get(String(s.category_id)) || 'Movies',
+            type: 'movie',
+          });
+        }
+      }
+
+      // Series
+      if (Array.isArray(serList) && Array.isArray(serCats)) {
+        const catMap = new Map(serCats.map((c: any) => [String(c.category_id), c.category_name || 'Series']));
+        for (const s of serList) {
+          if (!s.series_id) continue;
+          channels.push({
+            id: `ser-${s.series_id}`,
+            name: s.name || `Series ${s.series_id}`,
+            url: '',
+            logo: s.cover || undefined,
+            group: catMap.get(String(s.category_id)) || 'Series',
+            type: 'series',
+          });
+        }
+      }
+
+      if (channels.length === 0) {
+        throw new Error('لم يتم العثور على أي قنوات. تأكد من صحة بيانات الدخول.');
+      }
+
+      const categories = Array.from(new Set(channels.map(c => c.group!).filter(Boolean))).sort();
+      result = { channels, categories };
+
+      console.log(`Total channels: ${channels.length}, categories: ${categories.length}`);
+
     } else {
-      return jsonResponse({ error: 'Invalid type' }, 400);
+      return jsonResponse({ error: 'Invalid type. Use: m3u, xtream, or xtream_account_info' }, 400);
     }
 
-    // Save cache
+    // Save cache (1 hour)
     await supabase.from('playlist_cache').upsert({
-      user_id: userId, source_url: url || server, source_type: type,
-      cache_key: cacheKey, data: result, channel_count: result.channels.length,
+      user_id: userId,
+      source_url: url || server,
+      source_type: type,
+      cache_key: cacheKey,
+      data: result as any,
+      channel_count: result.channels.length,
       expires_at: new Date(Date.now() + 3600000).toISOString(),
     }, { onConflict: 'user_id,cache_key' });
 
     return jsonResponse(result);
   } catch (error) {
-    if (error instanceof PlaylistProviderError) {
-      console.warn('parse-playlist upstream warning:', error.code, error.message);
-      return jsonResponse({ ok: false, code: error.code, error: error.message });
-    }
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('parse-playlist failed:', message);
-    return jsonResponse({ error: message }, 500);
+    console.error('parse-playlist error:', message);
+    return jsonResponse({ ok: false, error: message }, 500);
   }
 });
