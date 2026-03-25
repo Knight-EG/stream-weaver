@@ -177,23 +177,15 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     return 'M3U URL';
   };
 
-  const handleDownloadM3u = async () => {
-    if (!server || !username || !password || downloadingM3u) return;
-    setDownloadingM3u(true);
-    try {
-      await downloadXtreamM3UFile({
-        server: server.trim(),
-        username: username.trim(),
-        password: password.trim(),
-      });
-      toast.success('تم تنزيل ملف M3U');
-    } catch (err) {
-      toast.error('فشل تنزيل ملف M3U', {
-        description: err instanceof Error ? err.message : 'تعذر إنشاء الملف من Xtream API',
-      });
-    } finally {
-      setDownloadingM3u(false);
-    }
+  const handleDownloadM3u = () => {
+    if (!server || !username || !password) return;
+    const urls = buildM3uDownloadUrls({
+      server: server.trim(),
+      username: username.trim(),
+      password: password.trim(),
+    });
+    // Open the first URL (port 80) in a new tab
+    window.open(urls[0], '_blank');
   };
 
   return (
