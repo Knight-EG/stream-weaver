@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useSpatialNavigation } from '@/hooks/useSpatialNavigation';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import type { Channel } from '@/lib/m3u-parser';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
-import { Radio, Film, Tv, Search, Settings, LogOut, ChevronRight, Play, Star, X } from 'lucide-react';
+import { Radio, Film, Tv, Search, Settings, LogOut, Play, Star, X, ArrowLeft, User, Clock, Heart } from 'lucide-react';
 
 interface TVLayoutProps {
   channels: Channel[];
@@ -12,23 +12,25 @@ interface TVLayoutProps {
   onToggleFavorite: (id: string, name: string) => void;
 }
 
-type TVSection = 'home' | 'live' | 'movies' | 'series' | 'search';
+type TVScreen = 'home' | 'live' | 'movies' | 'series' | 'favorites' | 'search' | 'settings' | 'category';
 
 export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProps) {
   useSpatialNavigation();
   const { t } = useLanguage();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
 
-  const [section, setSection] = useState<TVSection>('home');
+  const [screen, setScreen] = useState<TVScreen>('home');
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [browseType, setBrowseType] = useState<'live' | 'movie' | 'series'>('live');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Split channels by type
   const liveChannels = useMemo(() => channels.filter(ch => ch.type === 'live'), [channels]);
   const movieChannels = useMemo(() => channels.filter(ch => ch.type === 'movie'), [channels]);
   const seriesChannels = useMemo(() => channels.filter(ch => ch.type === 'series'), [channels]);
+  const favoriteChannels = useMemo(() => channels.filter(ch => favorites.has(ch.id)), [channels, favorites]);
 
   // Group channels by category
   const groupByCategory = useCallback((list: Channel[]) => {
@@ -52,29 +54,13 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
     return channels.filter(ch => ch.name.toLowerCase().includes(q) || ch.group?.toLowerCase().includes(q)).slice(0, 50);
   }, [channels, searchQuery]);
 
-  // Hero item - random featured content
-  const heroItem = useMemo(() => {
-    const pool = [...movieChannels, ...seriesChannels].filter(ch => ch.logo);
-    return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : liveChannels[0] || null;
-  }, [movieChannels, seriesChannels, liveChannels]);
-
-  // Favorite channels
-  const favoriteChannels = useMemo(() => channels.filter(ch => favorites.has(ch.id)), [channels, favorites]);
-
-  // Categories for browse mode
-  const currentCategories = useMemo(() => {
-    if (section === 'live') return liveGroups.map(([cat]) => cat);
-    if (section === 'movies') return movieGroups.map(([cat]) => cat);
-    if (section === 'series') return seriesGroups.map(([cat]) => cat);
-    return [];
-  }, [section, liveGroups, movieGroups, seriesGroups]);
-
-  const filteredByCategory = useMemo(() => {
+  // Category content
+  const categoryChannels = useMemo(() => {
     if (!selectedCategory) return [];
-    const source = section === 'live' ? liveGroups : section === 'movies' ? movieGroups : seriesGroups;
+    const source = browseType === 'live' ? liveGroups : browseType === 'movie' ? movieGroups : seriesGroups;
     const found = source.find(([cat]) => cat === selectedCategory);
     return found ? found[1] : [];
-  }, [selectedCategory, section, liveGroups, movieGroups, seriesGroups]);
+  }, [selectedCategory, browseType, liveGroups, movieGroups, seriesGroups]);
 
   // Channel navigation for live
   const channelIndex = useMemo(() => {
@@ -89,6 +75,18 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
   const handlePrev = useCallback(() => {
     if (channelIndex > 0) setActiveChannel(liveChannels[channelIndex - 1]);
   }, [channelIndex, liveChannels]);
+
+  const navigateTo = useCallback((s: TVScreen, type?: 'live' | 'movie' | 'series') => {
+    setScreen(s);
+    setSelectedCategory(null);
+    if (type) setBrowseType(type);
+  }, []);
+
+  const openCategory = useCallback((cat: string, type: 'live' | 'movie' | 'series') => {
+    setBrowseType(type);
+    setSelectedCategory(cat);
+    setScreen('category');
+  }, []);
 
   // Playing
   if (activeChannel) {
@@ -107,57 +105,199 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Navigation Bar */}
-      <nav className="fixed top-0 inset-x-0 z-40 bg-gradient-to-b from-background via-background/95 to-transparent">
-        <div className="flex items-center px-12 py-6 gap-8">
-          <h1 className="text-3xl font-bold text-gradient flex-shrink-0">{t('appName')}</h1>
+    <div className="min-h-screen bg-background text-foreground">
 
-          <div className="flex items-center gap-2" data-focus-group="nav">
-            {([
-              { id: 'home' as TVSection, label: t('dashboardHome') },
-              { id: 'live' as TVSection, label: t('dashboardLive') },
-              { id: 'movies' as TVSection, label: t('moviesTitle') },
-              { id: 'series' as TVSection, label: t('seriesTitle') },
-            ]).map(item => (
-              <button
-                key={item.id}
-                onClick={() => { setSection(item.id); setSelectedCategory(null); }}
-                className={`px-6 py-3 rounded-xl text-lg font-semibold transition-all tv-focusable ${
-                  section === item.id
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                data-focusable="true"
-              >
-                {item.label}
-              </button>
-            ))}
+      {/* ═══ HOME SCREEN ═══ */}
+      {screen === 'home' && (
+        <div className="min-h-screen flex flex-col">
+          {/* Header */}
+          <div className="px-12 pt-8 pb-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-primary">IPTV Player</h1>
+              <p className="text-lg text-muted-foreground mt-1">{user?.email}</p>
+            </div>
+            <div className="flex items-center gap-6 text-muted-foreground">
+              <div className="text-end">
+                <p className="text-sm">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <p className="text-xs mt-0.5">{channels.length} channels available</p>
+              </div>
+            </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-4">
-            <button
-              onClick={() => { setSection('search'); setTimeout(() => searchInputRef.current?.focus(), 100); }}
-              className="p-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 tv-focusable"
-              data-focusable="true"
-            >
-              <Search className="w-7 h-7" />
-            </button>
+          {/* Main Grid - IPTV Smarters Style */}
+          <div className="flex-1 flex items-center justify-center px-12 pb-12">
+            <div className="grid grid-cols-3 gap-6 w-full max-w-5xl" data-focus-group="home-grid">
+
+              {/* Live TV */}
+              <HomeCard
+                icon={<Radio className="w-16 h-16" />}
+                label={t('dashboardLive')}
+                count={liveChannels.length}
+                color="from-blue-600 to-blue-800"
+                onClick={() => navigateTo('live', 'live')}
+              />
+
+              {/* Movies */}
+              <HomeCard
+                icon={<Film className="w-16 h-16" />}
+                label={t('moviesTitle')}
+                count={movieChannels.length}
+                color="from-purple-600 to-purple-800"
+                onClick={() => navigateTo('movies', 'movie')}
+              />
+
+              {/* Series */}
+              <HomeCard
+                icon={<Tv className="w-16 h-16" />}
+                label={t('seriesTitle')}
+                count={seriesChannels.length}
+                color="from-emerald-600 to-emerald-800"
+                onClick={() => navigateTo('series', 'series')}
+              />
+
+              {/* Favorites */}
+              <HomeCard
+                icon={<Heart className="w-16 h-16" />}
+                label={t('playerFavorites')}
+                count={favoriteChannels.length}
+                color="from-rose-600 to-rose-800"
+                onClick={() => navigateTo('favorites')}
+              />
+
+              {/* Search */}
+              <HomeCard
+                icon={<Search className="w-16 h-16" />}
+                label={t('search')}
+                color="from-amber-600 to-amber-800"
+                onClick={() => { navigateTo('search'); setTimeout(() => searchInputRef.current?.focus(), 200); }}
+              />
+
+              {/* Settings */}
+              <HomeCard
+                icon={<Settings className="w-16 h-16" />}
+                label={t('settings')}
+                color="from-slate-600 to-slate-800"
+                onClick={() => navigateTo('settings')}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-12 pb-6 flex items-center justify-between text-sm text-muted-foreground">
+            <p>Use ← → ↑ ↓ to navigate • OK to select • Back to return</p>
             <button
               onClick={signOut}
-              className="p-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 tv-focusable"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-muted/50 tv-focusable text-muted-foreground hover:text-foreground"
               data-focusable="true"
             >
-              <LogOut className="w-7 h-7" />
+              <LogOut className="w-4 h-4" />
+              {t('signOut')}
             </button>
           </div>
         </div>
-      </nav>
+      )}
 
-      <div className="pt-24">
-        {/* SEARCH SECTION */}
-        {section === 'search' && (
-          <div className="px-12 py-8">
+      {/* ═══ LIVE / MOVIES / SERIES - Category List ═══ */}
+      {(screen === 'live' || screen === 'movies' || screen === 'series') && (
+        <div className="min-h-screen flex flex-col">
+          <TVHeader
+            title={screen === 'live' ? t('dashboardLive') : screen === 'movies' ? t('moviesTitle') : t('seriesTitle')}
+            icon={screen === 'live' ? <Radio className="w-8 h-8" /> : screen === 'movies' ? <Film className="w-8 h-8" /> : <Tv className="w-8 h-8" />}
+            onBack={() => setScreen('home')}
+          />
+          <div className="flex-1 px-12 py-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" data-focus-group="categories">
+              {/* All channels button */}
+              <button
+                onClick={() => openCategory('__all__', browseType)}
+                className="rounded-2xl bg-gradient-to-br from-primary/80 to-primary p-6 text-start tv-focusable transition-all hover:scale-105 focus:scale-105 focus:ring-4 focus:ring-primary/40"
+                data-focusable="true"
+              >
+                <p className="text-xl font-bold text-primary-foreground">{t('allCategories')}</p>
+                <p className="text-sm text-primary-foreground/70 mt-1">
+                  {screen === 'live' ? liveChannels.length : screen === 'movies' ? movieChannels.length : seriesChannels.length} items
+                </p>
+              </button>
+              {(screen === 'live' ? liveGroups : screen === 'movies' ? movieGroups : seriesGroups).map(([cat, items]) => (
+                <button
+                  key={cat}
+                  onClick={() => openCategory(cat, browseType)}
+                  className="rounded-2xl bg-card border-2 border-border p-6 text-start tv-focusable transition-all hover:scale-105 hover:border-primary focus:scale-105 focus:border-primary focus:ring-4 focus:ring-primary/30"
+                  data-focusable="true"
+                >
+                  <p className="text-lg font-semibold text-foreground truncate">{cat}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{items.length} items</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ CATEGORY VIEW - Channel Grid ═══ */}
+      {screen === 'category' && (
+        <div className="min-h-screen flex flex-col">
+          <TVHeader
+            title={selectedCategory === '__all__' ? t('allCategories') : selectedCategory || ''}
+            onBack={() => {
+              setScreen(browseType === 'live' ? 'live' : browseType === 'movie' ? 'movies' : 'series');
+              setSelectedCategory(null);
+            }}
+          />
+          <div className="flex-1 px-12 py-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4" data-focus-group="channels">
+              {(selectedCategory === '__all__'
+                ? (browseType === 'live' ? liveChannels : browseType === 'movie' ? movieChannels : seriesChannels)
+                : categoryChannels
+              ).map(ch => (
+                <TVChannelCard
+                  key={ch.id}
+                  channel={ch}
+                  isFavorite={favorites.has(ch.id)}
+                  onSelect={setActiveChannel}
+                  onToggleFavorite={() => onToggleFavorite(ch.id, ch.name)}
+                  isLandscape={ch.type === 'live'}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ FAVORITES ═══ */}
+      {screen === 'favorites' && (
+        <div className="min-h-screen flex flex-col">
+          <TVHeader title={t('playerFavorites')} icon={<Heart className="w-8 h-8" />} onBack={() => setScreen('home')} />
+          <div className="flex-1 px-12 py-6">
+            {favoriteChannels.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-96 text-muted-foreground">
+                <Heart className="w-20 h-20 mb-4 opacity-30" />
+                <p className="text-2xl">No favorites yet</p>
+                <p className="text-lg mt-2">Press and hold OK on any channel to add to favorites</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4" data-focus-group="favorites">
+                {favoriteChannels.map(ch => (
+                  <TVChannelCard
+                    key={ch.id}
+                    channel={ch}
+                    isFavorite
+                    onSelect={setActiveChannel}
+                    onToggleFavorite={() => onToggleFavorite(ch.id, ch.name)}
+                    isLandscape={ch.type === 'live'}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SEARCH ═══ */}
+      {screen === 'search' && (
+        <div className="min-h-screen flex flex-col">
+          <TVHeader title={t('search')} icon={<Search className="w-8 h-8" />} onBack={() => setScreen('home')} />
+          <div className="px-12 py-6">
             <div className="relative max-w-2xl mb-8">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-7 h-7 text-muted-foreground" />
               <input
@@ -176,210 +316,147 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
               )}
             </div>
             {searchResults.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4" data-focus-group="search-results">
                 {searchResults.map(ch => (
-                  <TVCard key={ch.id} channel={ch} onSelect={setActiveChannel} size="medium" />
+                  <TVChannelCard key={ch.id} channel={ch} isFavorite={favorites.has(ch.id)} onSelect={setActiveChannel} onToggleFavorite={() => onToggleFavorite(ch.id, ch.name)} isLandscape={ch.type === 'live'} />
                 ))}
               </div>
             ) : searchQuery ? (
               <p className="text-center text-2xl text-muted-foreground py-20">No results found</p>
-            ) : null}
-          </div>
-        )}
-
-        {/* HOME SECTION */}
-        {section === 'home' && (
-          <div className="space-y-8 pb-12">
-            {/* Hero Banner */}
-            {heroItem && (
-              <div className="relative mx-12 h-[50vh] min-h-[400px] rounded-3xl overflow-hidden bg-card">
-                {heroItem.logo && (
-                  <img src={heroItem.logo} alt={heroItem.name} className="absolute inset-0 w-full h-full object-cover opacity-40" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-12 space-y-4">
-                  <span className="inline-block px-4 py-1.5 rounded-full text-sm font-semibold bg-primary/20 text-primary border border-primary/30">
-                    {heroItem.type === 'movie' ? '🎬 Movie' : heroItem.type === 'series' ? '📺 Series' : '📡 Live'}
-                  </span>
-                  <h2 className="text-5xl font-bold text-foreground max-w-2xl leading-tight">{heroItem.name}</h2>
-                  {heroItem.group && <p className="text-xl text-muted-foreground">{heroItem.group}</p>}
-                  <button
-                    onClick={() => setActiveChannel(heroItem)}
-                    className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-primary text-primary-foreground text-xl font-bold hover:bg-primary/90 transition-all tv-focusable shadow-lg shadow-primary/30"
-                    data-focusable="true"
-                  >
-                    <Play className="w-7 h-7" />
-                    Play Now
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Favorites Row */}
-            {favoriteChannels.length > 0 && (
-              <TVRow
-                title={`⭐ ${t('playerFavorites')}`}
-                channels={favoriteChannels}
-                onSelect={setActiveChannel}
-              />
-            )}
-
-            {/* Live TV Row */}
-            {liveChannels.length > 0 && (
-              <TVRow
-                title={`📡 ${t('dashboardLive')}`}
-                channels={liveChannels.slice(0, 20)}
-                onSelect={setActiveChannel}
-                onViewAll={() => setSection('live')}
-                cardType="landscape"
-              />
-            )}
-
-            {/* Movies Row */}
-            {movieChannels.length > 0 && (
-              <TVRow
-                title={`🎬 ${t('moviesTitle')}`}
-                channels={movieChannels.slice(0, 20)}
-                onSelect={setActiveChannel}
-                onViewAll={() => setSection('movies')}
-              />
-            )}
-
-            {/* Series Row */}
-            {seriesChannels.length > 0 && (
-              <TVRow
-                title={`📺 ${t('seriesTitle')}`}
-                channels={seriesChannels.slice(0, 20)}
-                onSelect={setActiveChannel}
-                onViewAll={() => setSection('series')}
-              />
-            )}
-          </div>
-        )}
-
-        {/* LIVE / MOVIES / SERIES SECTION */}
-        {(section === 'live' || section === 'movies' || section === 'series') && (
-          <div className="pb-12">
-            {/* Category tabs */}
-            {currentCategories.length > 0 && (
-              <div className="px-12 mb-6">
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" data-focus-group="categories">
-                  <button
-                    onClick={() => setSelectedCategory(null)}
-                    className={`px-6 py-3 rounded-xl text-lg font-semibold whitespace-nowrap tv-focusable transition-all ${
-                      !selectedCategory ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground border border-border'
-                    }`}
-                    data-focusable="true"
-                  >
-                    {t('allCategories')}
-                  </button>
-                  {currentCategories.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
-                      className={`px-6 py-3 rounded-xl text-lg font-semibold whitespace-nowrap tv-focusable transition-all ${
-                        selectedCategory === cat ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground border border-border'
-                      }`}
-                      data-focusable="true"
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Content */}
-            {selectedCategory ? (
-              <div className="px-12">
-                <h2 className="text-3xl font-bold text-foreground mb-6">{selectedCategory}</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
-                  {filteredByCategory.map(ch => (
-                    <TVCard key={ch.id} channel={ch} onSelect={setActiveChannel} size="medium" />
-                  ))}
-                </div>
-              </div>
             ) : (
-              <div className="space-y-6">
-                {(section === 'live' ? liveGroups : section === 'movies' ? movieGroups : seriesGroups).map(([cat, items]) => (
-                  <TVRow
-                    key={cat}
-                    title={cat}
-                    channels={items.slice(0, 20)}
-                    onSelect={setActiveChannel}
-                    onViewAll={() => setSelectedCategory(cat)}
-                    cardType={section === 'live' ? 'landscape' : 'portrait'}
-                  />
-                ))}
-              </div>
+              <p className="text-center text-xl text-muted-foreground py-20">Type to search channels, movies, and series</p>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ═══ SETTINGS ═══ */}
+      {screen === 'settings' && (
+        <div className="min-h-screen flex flex-col">
+          <TVHeader title={t('settings')} icon={<Settings className="w-8 h-8" />} onBack={() => setScreen('home')} />
+          <div className="flex-1 px-12 py-6">
+            <div className="max-w-2xl space-y-4" data-focus-group="settings">
+              {/* Account Info */}
+              <div className="rounded-2xl bg-card border border-border p-6 space-y-4">
+                <h3 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                  <User className="w-7 h-7 text-primary" />
+                  Account
+                </h3>
+                <div className="space-y-2 text-lg">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Email</span>
+                    <span className="text-foreground">{user?.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Channels</span>
+                    <span className="text-foreground">{channels.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Live</span>
+                    <span className="text-foreground">{liveChannels.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Movies</span>
+                    <span className="text-foreground">{movieChannels.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Series</span>
+                    <span className="text-foreground">{seriesChannels.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sign Out */}
+              <button
+                onClick={signOut}
+                className="w-full rounded-2xl bg-destructive/10 border border-destructive/30 p-5 text-xl font-semibold text-destructive hover:bg-destructive/20 tv-focusable transition-all"
+                data-focusable="true"
+              >
+                <span className="flex items-center justify-center gap-3">
+                  <LogOut className="w-6 h-6" />
+                  {t('signOut')}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── Horizontal Scrolling Row ── */
-function TVRow({
+/* ═══ Home Card Tile ═══ */
+function HomeCard({
+  icon,
+  label,
+  count,
+  color,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count?: number;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative rounded-3xl bg-gradient-to-br ${color} p-8 flex flex-col items-center justify-center gap-4 min-h-[200px] tv-focusable transition-all duration-300 hover:scale-105 focus:scale-110 focus:ring-4 focus:ring-white/30 focus:shadow-[0_0_40px_rgba(255,255,255,0.2)] group`}
+      data-focusable="true"
+    >
+      <div className="text-white/90 group-focus:text-white transition-colors">
+        {icon}
+      </div>
+      <p className="text-2xl font-bold text-white">{label}</p>
+      {count !== undefined && (
+        <span className="absolute top-4 end-4 px-3 py-1 rounded-full bg-black/30 text-sm font-medium text-white/80">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/* ═══ TV Header Bar ═══ */
+function TVHeader({
   title,
-  channels,
-  onSelect,
-  onViewAll,
-  cardType = 'portrait',
+  icon,
+  onBack,
 }: {
   title: string;
-  channels: Channel[];
-  onSelect: (ch: Channel) => void;
-  onViewAll?: () => void;
-  cardType?: 'portrait' | 'landscape';
+  icon?: React.ReactNode;
+  onBack: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between px-12">
-        <h3 className="text-2xl font-bold text-foreground">{title}</h3>
-        {onViewAll && (
-          <button
-            onClick={onViewAll}
-            className="flex items-center gap-1 text-lg text-primary hover:text-primary/80 tv-focusable"
-            data-focusable="true"
-          >
-            View All <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-      <div
-        ref={scrollRef}
-        className="flex gap-4 overflow-x-auto px-12 pb-4 scrollbar-hide"
-        data-focus-group="row"
+    <div className="px-12 py-6 flex items-center gap-4 border-b border-border/50">
+      <button
+        onClick={onBack}
+        className="p-3 rounded-xl hover:bg-muted/50 tv-focusable text-muted-foreground hover:text-foreground transition-all"
+        data-focusable="true"
       >
-        {channels.map(ch => (
-          <TVCard key={ch.id} channel={ch} onSelect={onSelect} type={cardType} />
-        ))}
-      </div>
+        <ArrowLeft className="w-8 h-8" />
+      </button>
+      {icon && <span className="text-primary">{icon}</span>}
+      <h2 className="text-3xl font-bold text-foreground">{title}</h2>
     </div>
   );
 }
 
-/* ── TV Card Component ── */
-function TVCard({
+/* ═══ TV Channel Card ═══ */
+function TVChannelCard({
   channel,
+  isFavorite,
   onSelect,
-  type = 'portrait',
-  size = 'normal',
+  onToggleFavorite,
+  isLandscape = false,
 }: {
   channel: Channel;
+  isFavorite: boolean;
   onSelect: (ch: Channel) => void;
-  type?: 'portrait' | 'landscape';
-  size?: 'normal' | 'medium';
+  onToggleFavorite: () => void;
+  isLandscape?: boolean;
 }) {
-  const isLandscape = type === 'landscape';
-  const cardWidth = size === 'medium'
-    ? (isLandscape ? 'w-64' : 'w-44')
-    : (isLandscape ? 'w-72' : 'w-48');
-
   const icon = channel.type === 'movie' ? <Film className="w-10 h-10 text-muted-foreground" />
     : channel.type === 'series' ? <Tv className="w-10 h-10 text-muted-foreground" />
     : <Radio className="w-10 h-10 text-muted-foreground" />;
@@ -387,7 +464,7 @@ function TVCard({
   return (
     <button
       onClick={() => onSelect(channel)}
-      className={`${cardWidth} flex-shrink-0 rounded-2xl overflow-hidden bg-card border-2 border-transparent hover:border-primary transition-all tv-focusable group focus:border-primary focus:shadow-[0_0_30px_hsl(var(--primary)/0.4)] focus:scale-105`}
+      className="rounded-2xl overflow-hidden bg-card border-2 border-transparent hover:border-primary transition-all tv-focusable group focus:border-primary focus:shadow-[0_0_30px_hsl(var(--primary)/0.4)] focus:scale-105"
       data-focusable="true"
     >
       <div className={`${isLandscape ? 'aspect-video' : 'aspect-[2/3]'} bg-muted flex items-center justify-center overflow-hidden relative`}>
@@ -401,10 +478,16 @@ function TVCard({
         ) : icon}
         {/* Play overlay on focus */}
         <div className="absolute inset-0 bg-background/60 opacity-0 group-focus:opacity-100 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center shadow-lg">
-            <Play className="w-8 h-8 text-primary-foreground ml-1" />
+          <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center shadow-lg">
+            <Play className="w-7 h-7 text-primary-foreground ml-1" />
           </div>
         </div>
+        {/* Favorite star */}
+        {isFavorite && (
+          <div className="absolute top-2 end-2">
+            <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+          </div>
+        )}
       </div>
       <div className="p-3">
         <p className="text-base font-semibold text-foreground truncate">{channel.name}</p>
