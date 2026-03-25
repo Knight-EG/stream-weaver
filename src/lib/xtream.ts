@@ -32,16 +32,9 @@ function extractHostname(server: string): string {
   }
 }
 
-/** Build alternative base URLs with common Xtream ports */
+/** Use the server URL as-is — don't guess ports */
 function getAlternativeBases(server: string): string[] {
-  const hostname = extractHostname(server);
-  const mainBase = buildBase(server);
-  const bases = [mainBase];
-  const port80 = `http://${hostname}`;
-  if (!bases.includes(port80)) bases.push(port80);
-  const port25461 = `http://${hostname}:25461`;
-  if (!bases.includes(port25461)) bases.push(port25461);
-  return bases;
+  return [buildBase(server)];
 }
 
 function apiPath(username: string, password: string, action?: string): string {

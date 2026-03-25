@@ -24,23 +24,12 @@ function extractHostname(server: string): string {
  */
 export function buildM3uDownloadUrls(creds: XtreamCredentials): string[] {
   const base = normalizeServer(creds.server);
-  const hostname = extractHostname(creds.server);
   const u = creds.username;
   const p = creds.password;
   const params = `username=${u}&password=${p}&type=m3u_plus&output=ts`;
 
-  const urls = new Set<string>();
-
-  // 1. Standard port 80 (most common for get.php)
-  urls.add(`http://${hostname}/get.php?${params}`);
-
-  // 2. Same server URL the user entered (with their port)
-  urls.add(`${base}/get.php?${params}`);
-
-  // 3. Port 25461 (common Xtream streaming port)  
-  urls.add(`http://${hostname}:25461/get.php?${params}`);
-
-  return Array.from(urls);
+  // Use the exact server URL the user entered — don't guess ports
+  return [`${base}/get.php?${params}`];
 }
 
 /**
