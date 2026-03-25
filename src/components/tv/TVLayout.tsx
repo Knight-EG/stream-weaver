@@ -209,7 +209,7 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
                     data-focusable="true"
                   >
                     <Play className="w-7 h-7" />
-                    {t('playNow')}
+                    Play Now
                   </button>
                 </div>
               </div>
