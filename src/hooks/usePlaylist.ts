@@ -86,31 +86,8 @@ export function usePlaylist() {
         const { parseM3U } = await import('@/lib/m3u-parser');
         result = parseM3U(source.content);
       } else if (source.type === 'xtream') {
-        try {
-          const { fetchXtreamPlaylist } = await import('@/lib/xtream');
-          result = await fetchXtreamPlaylist(source.credentials);
-        } catch (clientErr) {
-          console.warn('Client-side Xtream failed, trying edge function:', clientErr);
-          try {
-            const { data, error } = await supabase.functions.invoke('parse-playlist', {
-              body: { type: 'xtream', server: source.credentials.server, username: source.credentials.username, password: source.credentials.password },
-            });
-            if (error) throw error;
-            if (data?.ok === false) throw new Error(data.error || 'Provider error');
-            result = data as ParsedPlaylist;
-          } catch (serverErr) {
-            const clientMessage = clientErr instanceof Error ? clientErr.message : String(clientErr);
-            const serverMessage = serverErr instanceof Error ? serverErr.message : String(serverErr);
-            const isHttpOnlyOnHttps = clientMessage.includes('HTTP فقط') || clientMessage.includes('HTTPS');
-            const serverBlocked = serverMessage.includes('403') || serverMessage.includes('PROVIDER_BLOCKED') || serverMessage.toLowerCase().includes('blocked');
-
-            if (isHttpOnlyOnHttps && serverBlocked) {
-              throw new Error('المزود ده شغال HTTP فقط، وده بيتمنع من المتصفح لأن التطبيق على HTTPS، وفي نفس الوقت السيرفر الخلفي محجوب من المزود (403). الحل: رابط HTTPS من المزود أو ملف M3U للرفع المباشر.');
-            }
-
-            throw new Error(serverMessage || clientMessage || 'تعذر الاتصال بمزود الخدمة.');
-          }
-        }
+        const { fetchXtreamPlaylist } = await import('@/lib/xtream');
+        result = await fetchXtreamPlaylist(source.credentials);
       } else {
         try {
           const { data, error } = await supabase.functions.invoke('parse-playlist', {
