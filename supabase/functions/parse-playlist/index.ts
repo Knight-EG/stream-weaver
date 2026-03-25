@@ -29,6 +29,18 @@ const upstreamHeaders = {
   'User-Agent': 'Mozilla/5.0 (compatible; LovablePlaylistParser/1.0; +https://lovable.dev)',
 };
 
+function isTlsCertificateError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+  return lower.includes('invalid peer certificate')
+    || lower.includes('causedasendentity')
+    || lower.includes('certificate subject name');
+}
+
+function toHttpUrl(url: string): string | null {
+  return url.startsWith('https://') ? `http://${url.slice('https://'.length)}` : null;
+}
+
 function looksLikeHtml(content: string): boolean {
   const trimmed = content.trim().toLowerCase();
   return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.startsWith('<body') || trimmed.startsWith('<');
@@ -54,13 +66,30 @@ function jsonResponse(payload: unknown, status = 200) {
 }
 
 async function fetchUpstreamText(url: string): Promise<{ response: Response; text: string }> {
-  const response = await fetch(url, {
-    headers: upstreamHeaders,
-    redirect: 'follow',
-  });
+  try {
+    const response = await fetch(url, {
+      headers: upstreamHeaders,
+      redirect: 'follow',
+    });
 
-  const text = await response.text();
-  return { response, text };
+    const text = await response.text();
+    return { response, text };
+  } catch (error) {
+    const httpFallbackUrl = toHttpUrl(url);
+
+    if (httpFallbackUrl && isTlsCertificateError(error)) {
+      console.warn(`TLS certificate error for ${url}. Retrying over HTTP fallback.`);
+      const response = await fetch(httpFallbackUrl, {
+        headers: upstreamHeaders,
+        redirect: 'follow',
+      });
+
+      const text = await response.text();
+      return { response, text };
+    }
+
+    throw error;
+  }
 }
 
 function parseM3U(content: string): { channels: Channel[]; categories: string[] } {
@@ -150,9 +179,8 @@ Deno.serve(async (req) => {
       if (!url) {
         return jsonResponse({ error: 'Missing url' }, 400);
       }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.status}`);
-      const text = await res.text();
+      const { response, text } = await fetchUpstreamText(url);
+      if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.status}`);
       result = parseM3U(text);
     } else if (type === 'xtream') {
       if (!server || !username || !password) {
