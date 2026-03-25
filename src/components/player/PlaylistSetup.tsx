@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radio, Server, Loader2, Upload, FileText } from 'lucide-react';
+import { Radio, Server, Loader2, Upload, FileText, Download } from 'lucide-react';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
 
 interface PlaylistSetupProps {
