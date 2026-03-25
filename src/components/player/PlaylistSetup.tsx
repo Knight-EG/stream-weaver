@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Radio, Server, Loader2, Upload, FileText, Download } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
-
+import { downloadXtreamM3UFile } from '@/lib/xtream-m3u';
 interface PlaylistSetupProps {
   onSubmit: (source: PlaylistSource) => void;
   loading: boolean;
@@ -15,6 +16,7 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fileName, setFileName] = useState('');
+  const [downloadingM3u, setDownloadingM3u] = useState(false);
 
   const handleSubmit = () => {
     if (mode === 'm3u' && m3uUrl.trim()) {
@@ -34,6 +36,25 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
       onSubmit({ type: 'file', content });
     };
     reader.readAsText(file);
+  };
+
+  const handleDownloadM3u = async () => {
+    if (!server || !username || !password || downloadingM3u) return;
+    setDownloadingM3u(true);
+    try {
+      await downloadXtreamM3UFile({
+        server: server.trim(),
+        username: username.trim(),
+        password: password.trim(),
+      });
+      toast.success('تم تنزيل ملف M3U');
+    } catch (err) {
+      toast.error('فشل تنزيل ملف M3U', {
+        description: err instanceof Error ? err.message : 'تعذر إنشاء الملف من Xtream API',
+      });
+    } finally {
+      setDownloadingM3u(false);
+    }
   };
 
   return (
@@ -159,16 +180,16 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
               {server && username && password && (
                 <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 space-y-3">
                   <p className="text-sm text-foreground font-medium">
-                    💡 لو الاتصال المباشر فشل، حمّل ملف M3U وارفعه في تبويب "Upload File"
+                    💡 الزر ده هيولّد ملف M3U من Xtream API مباشرة باستخدام IP جهازك الحالي.
                   </p>
-                  <a
-                    href={`${(() => { let s = server.trim().replace(/\/$/, ''); if (!/^https?:\/\//i.test(s)) s = 'http://' + s; return s; })()}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 rounded-lg bg-accent text-accent-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                  <button
+                    type="button"
+                    onClick={handleDownloadM3u}
+                    disabled={downloadingM3u}
+                    className="w-full py-3 rounded-lg bg-accent text-accent-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60"
                   >
-                    <Download className="w-5 h-5" /> تحميل ملف M3U
-                  </a>
+                    <Download className="w-5 h-5" /> {downloadingM3u ? 'جاري إنشاء الملف...' : 'تنزيل ملف M3U'}
+                  </button>
                 </div>
               )}
             </>

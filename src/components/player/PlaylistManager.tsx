@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Radio, Server, Upload, Trash2, Play, Plus, Edit2, Check, X, FileText, List, Download } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
-
+import { downloadXtreamM3UFile } from '@/lib/xtream-m3u';
 export interface SavedPlaylist {
   id: string;
   name: string;
@@ -54,6 +55,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fileName, setFileName] = useState('');
+  const [downloadingM3u, setDownloadingM3u] = useState(false);
 
   const activeId = getActivePlaylistId();
 
@@ -174,6 +176,25 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
     if (source.type === 'xtream') return 'Xtream Codes';
     if (source.type === 'file') return 'Uploaded File';
     return 'M3U URL';
+  };
+
+  const handleDownloadM3u = async () => {
+    if (!server || !username || !password || downloadingM3u) return;
+    setDownloadingM3u(true);
+    try {
+      await downloadXtreamM3UFile({
+        server: server.trim(),
+        username: username.trim(),
+        password: password.trim(),
+      });
+      toast.success('تم تنزيل ملف M3U');
+    } catch (err) {
+      toast.error('فشل تنزيل ملف M3U', {
+        description: err instanceof Error ? err.message : 'تعذر إنشاء الملف من Xtream API',
+      });
+    } finally {
+      setDownloadingM3u(false);
+    }
   };
 
   return (
@@ -340,49 +361,21 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                 <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable" data-focusable="true"
                   onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }} />
-                {server && username && password && (() => {
-                  let base = server.trim().replace(/\/$/, '');
-                  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
-                  const m3uUrl1 = `${base}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`;
-                  const m3uUrl2 = `${base}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus`;
-                  return (
-                    <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        💡 لو الاتصال فشل، حمّل ملف M3U وارفعه في تبويب "File"
-                      </p>
-                      <div className="flex gap-2">
-                        <a
-                          href={m3uUrl1}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download="playlist.m3u"
-                          className="flex-1 py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                        >
-                          <Download className="w-4 h-4" /> تحميل M3U
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(m3uUrl1);
-                            alert('تم نسخ الرابط! الصقه في المتصفح لتحميل الملف');
-                          }}
-                          className="px-3 py-2.5 rounded-lg bg-muted text-muted-foreground text-sm hover:text-foreground transition-colors"
-                          title="نسخ الرابط"
-                        >
-                          📋
-                        </button>
-                      </div>
-                      <details className="text-xs">
-                        <summary className="text-muted-foreground cursor-pointer hover:text-foreground">لو مش شغال، جرب الرابط البديل</summary>
-                        <div className="mt-2 space-y-1">
-                          <a href={m3uUrl2} target="_blank" rel="noopener noreferrer" download="playlist.m3u"
-                            className="block text-primary underline break-all hover:no-underline">رابط بديل (بدون output=ts)</a>
-                          <p className="text-muted-foreground break-all select-all mt-1 bg-muted p-2 rounded text-[10px]">{m3uUrl1}</p>
-                        </div>
-                      </details>
-                    </div>
-                  );
-                })()}
+                {server && username && password && (
+                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      💡 الزر ده هيولّد ملف M3U من Xtream API مباشرة باستخدام IP جهازك الحالي.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleDownloadM3u}
+                      disabled={downloadingM3u}
+                      className="w-full py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60"
+                    >
+                      <Download className="w-4 h-4" /> {downloadingM3u ? 'جاري إنشاء الملف...' : 'تنزيل ملف M3U'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
