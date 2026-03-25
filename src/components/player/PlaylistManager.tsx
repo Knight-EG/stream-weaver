@@ -346,7 +346,7 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                       💡 لو الاتصال فشل، حمّل ملف M3U وارفعه في تبويب "File"
                     </p>
                     <a
-                      href={`${server.trim().replace(/\/$/, '')}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
+                      href={`${(() => { let s = server.trim().replace(/\/$/, ''); if (!/^https?:\/\//i.test(s)) s = 'http://' + s; return s; })()}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
