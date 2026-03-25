@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle, Lock } from 'lucide-react';
 import { startSession, endSession } from '@/lib/analytics';
 import { fetchEPGForChannel, getCurrentProgram, getProgramProgress, type EPGProgram } from '@/lib/epg';
+import { getSecureStreamUrl } from '@/lib/stream-proxy';
 
 interface VideoPlayerProps {
   url: string;
@@ -30,6 +31,7 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
   const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
   const [currentEPG, setCurrentEPG] = useState<EPGProgram | null>(null);
   const [epgProgress, setEpgProgress] = useState(0);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const hideTimer = useRef<number>(0);
   const retryTimer = useRef<number>(0);
 
@@ -42,10 +44,8 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
     hideTimer.current = window.setTimeout(() => setShowControls(false), 4000);
   }, []);
 
-  // Exponential backoff retry
   const retryWithBackoff = useCallback((attempt: number) => {
     if (attempt >= MAX_RETRIES) {
-      // Try fallback URL
       if (currentUrlIndex < allUrls.length - 1) {
         setCurrentUrlIndex(i => i + 1);
         setRetryCount(0);
@@ -61,7 +61,26 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
     }, delay);
   }, [currentUrlIndex, allUrls.length]);
 
+  // Resolve secure stream URL
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setResolvedUrl(null);
+
+    const id = channelId || `ch-${activeUrl}`;
+    getSecureStreamUrl(id, activeUrl).then(secureUrl => {
+      if (!cancelled) setResolvedUrl(secureUrl);
+    }).catch(() => {
+      if (!cancelled) setResolvedUrl(activeUrl); // fallback to direct
+    });
+
+    return () => { cancelled = true; };
+  }, [activeUrl, channelId]);
+
+  // Load video when URL is resolved
+  useEffect(() => {
+    if (!resolvedUrl) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -71,10 +90,11 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    // Track analytics
     if (title) startSession(title, activeUrl);
 
-    if (activeUrl.includes('.m3u8') && Hls.isSupported()) {
+    const playUrl = resolvedUrl;
+
+    if ((playUrl.includes('.m3u8') || playUrl.includes('stream-proxy')) && Hls.isSupported()) {
       const hls = new Hls({
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
@@ -85,7 +105,7 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
         levelLoadingMaxRetry: 3,
       });
       hlsRef.current = hls;
-      hls.loadSource(activeUrl);
+      hls.loadSource(playUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().then(() => setPlaying(true)).catch(() => {});
@@ -104,7 +124,7 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
         }
       });
     } else {
-      video.src = activeUrl;
+      video.src = playUrl;
       const onCanPlay = () => {
         video.play().then(() => setPlaying(true)).catch(() => {});
         setLoading(false);
@@ -119,7 +139,7 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
       clearTimeout(retryTimer.current);
       endSession();
     };
-  }, [activeUrl, retryCount]);
+  }, [resolvedUrl, retryCount]);
 
   // EPG
   useEffect(() => {
@@ -184,7 +204,7 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
           <AlertTriangle className="w-10 h-10 text-destructive" />
           <p className="text-destructive text-lg font-medium">{error}</p>
           <button
-            onClick={() => { setError(null); setRetryCount(0); setCurrentUrlIndex(0); }}
+            onClick={() => { setError(null); setRetryCount(0); setCurrentUrlIndex(0); setResolvedUrl(null); }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md tv-focusable"
             data-focusable="true"
           >
