@@ -1,16 +1,23 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle } from 'lucide-react';
+import { startSession, endSession } from '@/lib/analytics';
+import { fetchEPGForChannel, getCurrentProgram, getProgramProgress, type EPGProgram } from '@/lib/epg';
 
 interface VideoPlayerProps {
   url: string;
   title?: string;
+  channelId?: string;
+  fallbackUrls?: string[];
   onBack?: () => void;
   onNext?: () => void;
   onPrev?: () => void;
 }
 
-export function VideoPlayer({ url, title, onBack, onNext, onPrev }: VideoPlayerProps) {
+const MAX_RETRIES = 5;
+const BASE_DELAY = 1000;
+
+export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, onNext, onPrev }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,13 +26,40 @@ export function VideoPlayer({ url, title, onBack, onNext, onPrev }: VideoPlayerP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
+  const [currentEPG, setCurrentEPG] = useState<EPGProgram | null>(null);
+  const [epgProgress, setEpgProgress] = useState(0);
   const hideTimer = useRef<number>(0);
+  const retryTimer = useRef<number>(0);
+
+  const allUrls = [url, ...fallbackUrls];
+  const activeUrl = allUrls[currentUrlIndex] || url;
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
     clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => setShowControls(false), 4000);
   }, []);
+
+  // Exponential backoff retry
+  const retryWithBackoff = useCallback((attempt: number) => {
+    if (attempt >= MAX_RETRIES) {
+      // Try fallback URL
+      if (currentUrlIndex < allUrls.length - 1) {
+        setCurrentUrlIndex(i => i + 1);
+        setRetryCount(0);
+        return;
+      }
+      setError('Stream unavailable after multiple retries.');
+      setLoading(false);
+      return;
+    }
+    const delay = BASE_DELAY * Math.pow(2, attempt) + Math.random() * 1000;
+    retryTimer.current = window.setTimeout(() => {
+      setRetryCount(attempt + 1);
+    }, delay);
+  }, [currentUrlIndex, allUrls.length]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -37,57 +71,77 @@ export function VideoPlayer({ url, title, onBack, onNext, onPrev }: VideoPlayerP
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    if (url.includes('.m3u8') && Hls.isSupported()) {
+    // Track analytics
+    if (title) startSession(title, activeUrl);
+
+    if (activeUrl.includes('.m3u8') && Hls.isSupported()) {
       const hls = new Hls({
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
         startLevel: -1,
         capLevelToPlayerSize: true,
+        fragLoadingMaxRetry: 3,
+        manifestLoadingMaxRetry: 3,
+        levelLoadingMaxRetry: 3,
       });
       hlsRef.current = hls;
-      hls.loadSource(url);
+      hls.loadSource(activeUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().then(() => setPlaying(true)).catch(() => {});
         setLoading(false);
+        setRetryCount(0);
       });
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            setTimeout(() => hls.startLoad(), 3000);
+            hls.destroy();
+            retryWithBackoff(retryCount);
           } else {
-            setError('Playback error. Please try again.');
+            setError('Playback error.');
             setLoading(false);
           }
         }
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = url;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().then(() => setPlaying(true)).catch(() => {});
-        setLoading(false);
-      }, { once: true });
     } else {
-      video.src = url;
-      video.addEventListener('canplay', () => {
+      video.src = activeUrl;
+      const onCanPlay = () => {
         video.play().then(() => setPlaying(true)).catch(() => {});
         setLoading(false);
-      }, { once: true });
+        setRetryCount(0);
+      };
+      video.addEventListener('canplay', onCanPlay, { once: true });
+      video.addEventListener('error', () => retryWithBackoff(retryCount), { once: true });
     }
 
-    return () => { hlsRef.current?.destroy(); };
-  }, [url]);
+    return () => {
+      hlsRef.current?.destroy();
+      clearTimeout(retryTimer.current);
+      endSession();
+    };
+  }, [activeUrl, retryCount]);
 
+  // EPG
   useEffect(() => {
-    resetHideTimer();
-    return () => clearTimeout(hideTimer.current);
-  }, [resetHideTimer]);
+    if (!channelId) return;
+    let mounted = true;
+    fetchEPGForChannel(channelId).then(programs => {
+      if (!mounted) return;
+      const current = getCurrentProgram(programs);
+      setCurrentEPG(current);
+    });
+    const interval = setInterval(() => {
+      if (currentEPG) setEpgProgress(getProgramProgress(currentEPG));
+    }, 10000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, [channelId]);
+
+  useEffect(() => { resetHideTimer(); return () => clearTimeout(hideTimer.current); }, [resetHideTimer]);
 
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); }
-    else { v.pause(); setPlaying(false); }
+    if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); }
   };
 
   const toggleMute = () => {
@@ -111,24 +165,26 @@ export function VideoPlayer({ url, title, onBack, onNext, onPrev }: VideoPlayerP
       onMouseMove={resetHideTimer}
       onClick={resetHideTimer}
     >
-      <video
-        ref={videoRef}
-        className="w-full h-full object-contain"
-        playsInline
-        onError={() => { setError('Failed to load stream'); setLoading(false); }}
-      />
+      <video ref={videoRef} className="w-full h-full object-contain" playsInline />
 
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-player-bg/80">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-player-bg/80 gap-2">
           <Loader2 className="w-12 h-12 text-primary animate-spin" />
+          {retryCount > 0 && (
+            <p className="text-muted-foreground text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning" />
+              Retry {retryCount}/{MAX_RETRIES}...
+            </p>
+          )}
         </div>
       )}
 
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-player-bg/90 gap-3">
+          <AlertTriangle className="w-10 h-10 text-destructive" />
           <p className="text-destructive text-lg font-medium">{error}</p>
           <button
-            onClick={() => { setError(null); setLoading(true); if (videoRef.current) videoRef.current.load(); }}
+            onClick={() => { setError(null); setRetryCount(0); setCurrentUrlIndex(0); }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md tv-focusable"
             data-focusable="true"
           >
@@ -141,11 +197,21 @@ export function VideoPlayer({ url, title, onBack, onNext, onPrev }: VideoPlayerP
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-player-bg/80 to-transparent p-4">
           <div className="flex items-center gap-3">
             {onBack && (
-              <button onClick={onBack} className="text-foreground/80 hover:text-foreground tv-focusable p-1" data-focusable="true">
+              <button onClick={onBack} className="text-foreground/80 hover:text-foreground tv-focusable p-1" data-focusable="true" data-back-button="true">
                 ← Back
               </button>
             )}
-            {title && <h2 className="text-foreground font-semibold text-lg truncate">{title}</h2>}
+            <div className="flex-1 min-w-0">
+              {title && <h2 className="text-foreground font-semibold text-lg truncate">{title}</h2>}
+              {currentEPG && (
+                <div className="mt-1">
+                  <p className="text-muted-foreground text-xs truncate">Now: {currentEPG.title}</p>
+                  <div className="w-48 h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${epgProgress}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -14,16 +14,253 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      devices: {
+        Row: {
+          created_at: string
+          device_id: string
+          device_name: string
+          fingerprint: string | null
+          id: string
+          ip_address: unknown
+          is_active: boolean
+          last_seen_at: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          device_name?: string
+          fingerprint?: string | null
+          id?: string
+          ip_address?: unknown
+          is_active?: boolean
+          last_seen_at?: string
+          platform?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          device_name?: string
+          fingerprint?: string | null
+          id?: string
+          ip_address?: unknown
+          is_active?: boolean
+          last_seen_at?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      epg_data: {
+        Row: {
+          category: string | null
+          channel_id: string
+          created_at: string
+          description: string | null
+          end_time: string
+          id: string
+          source_url: string | null
+          start_time: string
+          title: string
+        }
+        Insert: {
+          category?: string | null
+          channel_id: string
+          created_at?: string
+          description?: string | null
+          end_time: string
+          id?: string
+          source_url?: string | null
+          start_time: string
+          title: string
+        }
+        Update: {
+          category?: string | null
+          channel_id?: string
+          created_at?: string
+          description?: string | null
+          end_time?: string
+          id?: string
+          source_url?: string | null
+          start_time?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      playlist_cache: {
+        Row: {
+          cache_key: string
+          channel_count: number
+          created_at: string
+          data: Json
+          expires_at: string
+          id: string
+          source_type: string
+          source_url: string | null
+          user_id: string
+        }
+        Insert: {
+          cache_key: string
+          channel_count?: number
+          created_at?: string
+          data: Json
+          expires_at?: string
+          id?: string
+          source_type: string
+          source_url?: string | null
+          user_id: string
+        }
+        Update: {
+          cache_key?: string
+          channel_count?: number
+          created_at?: string
+          data?: Json
+          expires_at?: string
+          id?: string
+          source_type?: string
+          source_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          max_devices: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          max_devices?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          max_devices?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      streaming_sessions: {
+        Row: {
+          channel_name: string
+          channel_url: string | null
+          device_id: string
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          platform: string | null
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_name: string
+          channel_url?: string | null
+          device_id: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          platform?: string | null
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_name?: string
+          channel_url?: string | null
+          device_id?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          platform?: string | null
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          max_devices: number
+          starts_at: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          max_devices?: number
+          starts_at?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          max_devices?: number
+          starts_at?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      subscription_status: "active" | "expired" | "suspended"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +387,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      subscription_status: ["active", "expired", "suspended"],
+    },
   },
 } as const

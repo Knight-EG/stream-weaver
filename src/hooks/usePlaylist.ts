@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { type Channel, type ParsedPlaylist, fetchAndParseM3U } from '@/lib/m3u-parser';
 import { type XtreamCredentials, fetchXtreamPlaylist } from '@/lib/xtream';
+import { getCachedPlaylist, setCachedPlaylist, buildCategoryIndex } from '@/lib/playlist-cache';
 
 export type PlaylistSource =
   | { type: 'm3u'; url: string }
@@ -14,6 +15,7 @@ interface PlaylistState {
   selectedCategory: string | null;
   searchQuery: string;
   favorites: Set<string>;
+  categoryIndex: Map<string, number[]>;
 }
 
 const FAVORITES_KEY = 'iptv_favorites';
@@ -38,23 +40,38 @@ export function usePlaylist() {
     selectedCategory: null,
     searchQuery: '',
     favorites: loadFavorites(),
+    categoryIndex: new Map(),
   });
 
   const loadPlaylist = useCallback(async (source: PlaylistSource) => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
+      // Check cache first
+      const cacheKey = source.type === 'm3u' ? source.url : `${source.credentials.server}:${source.credentials.username}`;
+      const cached = getCachedPlaylist(cacheKey);
+
       let result: ParsedPlaylist;
-      if (source.type === 'm3u') {
-        result = await fetchAndParseM3U(source.url);
+      if (cached) {
+        result = cached;
       } else {
-        result = await fetchXtreamPlaylist(source.credentials);
+        if (source.type === 'm3u') {
+          result = await fetchAndParseM3U(source.url);
+        } else {
+          result = await fetchXtreamPlaylist(source.credentials);
+        }
+        // Cache the result
+        setCachedPlaylist(cacheKey, result);
       }
+
+      const categoryIndex = buildCategoryIndex(result.channels);
+
       setState(s => ({
         ...s,
         channels: result.channels,
         categories: result.categories,
         loading: false,
         selectedCategory: null,
+        categoryIndex,
       }));
     } catch (err) {
       setState(s => ({
@@ -83,15 +100,25 @@ export function usePlaylist() {
     });
   }, []);
 
-  const filteredChannels = state.channels.filter(ch => {
-    if (state.selectedCategory === '__favorites__') return state.favorites.has(ch.id);
-    if (state.selectedCategory && ch.group !== state.selectedCategory) return false;
+  const filteredChannels = useMemo(() => {
+    let channels = state.channels;
+
+    if (state.selectedCategory === '__favorites__') {
+      channels = channels.filter(ch => state.favorites.has(ch.id));
+    } else if (state.selectedCategory && state.categoryIndex.has(state.selectedCategory)) {
+      const indices = state.categoryIndex.get(state.selectedCategory)!;
+      channels = indices.map(i => state.channels[i]);
+    }
+
     if (state.searchQuery) {
       const q = state.searchQuery.toLowerCase();
-      return ch.name.toLowerCase().includes(q) || ch.group?.toLowerCase().includes(q);
+      channels = channels.filter(ch =>
+        ch.name.toLowerCase().includes(q) || ch.group?.toLowerCase().includes(q)
+      );
     }
-    return true;
-  });
+
+    return channels;
+  }, [state.channels, state.selectedCategory, state.searchQuery, state.favorites, state.categoryIndex]);
 
   return {
     ...state,
