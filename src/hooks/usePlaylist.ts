@@ -3,6 +3,7 @@ import { type Channel, type ParsedPlaylist } from '@/lib/m3u-parser';
 import { type XtreamCredentials } from '@/lib/xtream';
 import { getCachedPlaylist, setCachedPlaylist, buildCategoryIndex } from '@/lib/playlist-cache';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/sonner';
 
 export type PlaylistSource =
   | { type: 'm3u'; url: string }
@@ -81,7 +82,6 @@ export function usePlaylist() {
 
       let result: ParsedPlaylist;
 
-      // File upload: parse directly on client
       if (source.type === 'file') {
         const { parseM3U } = await import('@/lib/m3u-parser');
         result = parseM3U(source.content);
@@ -112,7 +112,6 @@ export function usePlaylist() {
           }
         }
       } else {
-        // M3U URL: try edge function first, then client
         try {
           const { data, error } = await supabase.functions.invoke('parse-playlist', {
             body: { type: 'm3u', url: source.url },
@@ -139,11 +138,16 @@ export function usePlaylist() {
         categoryIndex,
       }));
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load playlist';
       setState(s => ({
         ...s,
         loading: false,
-        error: err instanceof Error ? err.message : 'Failed to load playlist',
+        error: message,
       }));
+      toast.error('فشل تحميل قائمة التشغيل', {
+        description: message,
+        duration: 9000,
+      });
     }
   }, []);
 
