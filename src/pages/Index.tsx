@@ -151,7 +151,12 @@ export default function Index() {
             </div>
             <div className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground border-b border-border pb-3">
               <span className="truncate">{user?.email}</span>
-              {access?.subscription && (
+              {access?.subscription?.planType === 'lifetime' && (
+                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-accent/20 text-accent flex items-center gap-0.5">
+                  <Infinity className="w-2.5 h-2.5" /> Lifetime
+                </span>
+              )}
+              {access?.subscription && access.subscription.planType !== 'lifetime' && (
                 <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-success/20 text-success">Active</span>
               )}
               {access?.trialActive && !access?.subscription && (
