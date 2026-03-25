@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-client-ip',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface Channel {
@@ -23,30 +23,25 @@ class PlaylistProviderError extends Error {
   }
 }
 
-// Realistic User-Agent strings that Xtream providers actually whitelist
+// User-Agent strings starting with IPTVSmartersPro (most accepted by providers)
 const userAgents = [
-  'IPTVSmarts',                          // Most widely accepted short value
-  'IPTVSmartersPro',                     // Smarters Pro variant
-  'VLC/3.0.20 LibVLC/3.0.20',           // VLC media player
-  'Lavf/60.16.100',                      // FFmpeg/libav (used by many players)
+  'IPTVSmartersPro',
+  'IPTVSmarts',
+  'VLC/3.0.20 LibVLC/3.0.20',
+  'Lavf/60.16.100',
   'Kodi/20.2 (Linux; Android 12) Kodi/20.2',
-  'okhttp/4.12.0',                       // OkHttp (Android apps)
+  'okhttp/4.12.0',
   'Dalvik/2.1.0 (Linux; U; Android 13; SM-S908B Build/TP1A.220624.014)',
   'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.5) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.0 Chrome/85.0.4183.93 TV Safari/537.36',
 ];
 
-function getUpstreamHeaders(agentIndex: number, clientIp?: string): Record<string, string> {
-  const headers: Record<string, string> = {
+// Clean headers — NO X-Forwarded-For or X-Real-IP (firewalls detect these)
+function getUpstreamHeaders(agentIndex: number): Record<string, string> {
+  return {
     'Accept': '*/*',
     'User-Agent': userAgents[agentIndex % userAgents.length],
     'Connection': 'keep-alive',
   };
-  // Forward the real user IP so the provider sees the user's IP, not datacenter
-  if (clientIp) {
-    headers['X-Forwarded-For'] = clientIp;
-    headers['X-Real-IP'] = clientIp;
-  }
-  return headers;
 }
 
 function isTlsCertificateError(error: unknown): boolean {
@@ -85,8 +80,8 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-async function fetchUpstreamText(url: string, agentIndex: number, clientIp?: string): Promise<{ response: Response; text: string }> {
-  const headers = getUpstreamHeaders(agentIndex, clientIp);
+async function fetchUpstreamText(url: string, agentIndex: number): Promise<{ response: Response; text: string }> {
+  const headers = getUpstreamHeaders(agentIndex);
 
   try {
     const controller = new AbortController();
@@ -110,14 +105,14 @@ async function fetchUpstreamText(url: string, agentIndex: number, clientIp?: str
   }
 }
 
-// Try fetching with multiple User-Agent strings
-async function fetchWithRetry(url: string, clientIp?: string): Promise<{ response: Response; text: string }> {
+// Try fetching with multiple User-Agent strings until one works
+async function fetchWithRetry(url: string): Promise<{ response: Response; text: string }> {
   let lastError: Error | null = null;
   const maxRetries = userAgents.length;
 
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const result = await fetchUpstreamText(url, i, clientIp);
+      const result = await fetchUpstreamText(url, i);
       if (result.response.status === 403 && i < maxRetries - 1) {
         console.log(`Got 403 with agent ${i} (${userAgents[i]}), trying next...`);
         continue;
@@ -168,16 +163,9 @@ function buildXtreamBase(server: string): string {
   return base;
 }
 
-// Build Xtream URL — credentials sent as-is (case-sensitive), NO double-encoding
+// Simple URL builder — no unnecessary encoding (fixes 400 errors on old Xtream panels)
 function buildXtreamUrl(base: string, username: string, password: string, action?: string): string {
-  // Some old Xtream servers choke on encoded chars, so we try raw first
-  // Only encode if there are truly unsafe URL chars beyond normal password chars
-  const safeEncode = (v: string) => {
-    // If value only contains safe URL chars, don't encode
-    if (/^[A-Za-z0-9._~!$'()*+,;:@\/-]+$/.test(v)) return v;
-    return encodeURIComponent(v);
-  };
-  const params = `username=${safeEncode(username)}&password=${safeEncode(password)}`;
+  const params = `username=${username}&password=${password}`;
   if (action) return `${base}/player_api.php?${params}&action=${action}`;
   return `${base}/player_api.php?${params}`;
 }
@@ -206,13 +194,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { type, url, username, password, server } = body;
 
-    // Extract real client IP from custom header or standard headers
-    const clientIp = req.headers.get('x-client-ip')
-      || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('cf-connecting-ip')
-      || undefined;
-
-    console.log(`Request type=${type}, clientIp=${clientIp || 'unknown'}`);
+    console.log(`Request type=${type}, server=${server || url || 'n/a'}`);
 
     if (!type) {
       return jsonResponse({ error: 'Missing type (m3u, xtream, or xtream_account_info)' }, 400);
@@ -227,7 +209,7 @@ Deno.serve(async (req) => {
       const accountUrl = buildXtreamUrl(base, username, password);
 
       try {
-        const { response, text } = await fetchWithRetry(accountUrl, clientIp);
+        const { response, text } = await fetchWithRetry(accountUrl);
         if (!response.ok) {
           console.warn(`Account info returned ${response.status}, body: ${text.slice(0, 200)}`);
           return jsonResponse({
@@ -239,7 +221,6 @@ Deno.serve(async (req) => {
 
         const data = safeJsonParse<any>(text);
         const info = data.user_info || {};
-
         const toIso = (v: any) => { const ts = parseInt(v, 10); return isNaN(ts) ? null : new Date(ts * 1000).toISOString(); };
 
         return jsonResponse({
@@ -282,19 +263,18 @@ Deno.serve(async (req) => {
 
     if (type === 'm3u') {
       if (!url) return jsonResponse({ error: 'Missing url' }, 400);
-      const { response, text } = await fetchWithRetry(url, clientIp);
+      const { response, text } = await fetchWithRetry(url);
       if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.status}`);
       result = parseM3U(text);
     } else if (type === 'xtream') {
       if (!server || !username || !password) return jsonResponse({ error: 'Missing xtream credentials' }, 400);
       const base = buildXtreamBase(server);
 
-      // Try Xtream API
       let apiWorked = false;
       try {
         const [catsRes, streamsRes] = await Promise.all([
-          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_categories'), clientIp),
-          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_streams'), clientIp),
+          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_categories')),
+          fetchWithRetry(buildXtreamUrl(base, username, password, 'get_live_streams')),
         ]);
 
         apiWorked = catsRes.response.ok && streamsRes.response.ok;
@@ -311,8 +291,8 @@ Deno.serve(async (req) => {
 
             try {
               const [vodCatsRes, vodStreamsRes] = await Promise.all([
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_categories'), clientIp),
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_streams'), clientIp),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_categories')),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_vod_streams')),
               ]);
               if (vodCatsRes.response.ok && vodStreamsRes.response.ok) {
                 const vodCats = safeJsonParse<any[]>(vodCatsRes.text);
@@ -330,8 +310,8 @@ Deno.serve(async (req) => {
 
             try {
               const [serCatsRes, serStreamsRes] = await Promise.all([
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series_categories'), clientIp),
-                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series'), clientIp),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series_categories')),
+                fetchWithRetry(buildXtreamUrl(base, username, password, 'get_series')),
               ]);
               if (serCatsRes.response.ok && serStreamsRes.response.ok) {
                 const serCats = safeJsonParse<any[]>(serCatsRes.text);
@@ -365,16 +345,16 @@ Deno.serve(async (req) => {
         console.log('Xtream API failed, falling back to M3U format');
         const m3uUrl = `${base}/get.php?username=${username}&password=${password}&type=m3u_plus&output=ts`;
         try {
-          const m3uRes = await fetchWithRetry(m3uUrl, clientIp);
+          const m3uRes = await fetchWithRetry(m3uUrl);
           if (!m3uRes.response.ok) {
             throw new PlaylistProviderError('PROVIDER_BLOCKED',
-              `المزود رفض الاتصال (${m3uRes.response.status}). قد يكون المزود يحجب عناوين IP الخاصة بالخوادم السحابية.\n\nالحلول:\n1. تأكد أن اسم المستخدم وكلمة المرور صحيحة (حساسة لحالة الأحرف)\n2. حمّل ملف M3U من المزود وارفعه مباشرة\n3. تواصل مع المزود لفتح الوصول`);
+              `المزود رفض الاتصال (${m3uRes.response.status}). قد يكون المزود يحجب عناوين IP الخاصة بالخوادم السحابية.\n\nالحلول:\n1. تأكد أن اسم المستخدم وكلمة المرور صحيحة\n2. حمّل ملف M3U من المزود وارفعه مباشرة\n3. تواصل مع المزود لفتح الوصول`);
           }
           result = parseM3U(m3uRes.text);
         } catch (err) {
           if (err instanceof PlaylistProviderError) throw err;
           throw new PlaylistProviderError('PROVIDER_BLOCKED',
-            `تعذر الاتصال بمزود الخدمة. قد يكون المزود يحجب عناوين IP السحابية.\n\nالحلول:\n1. ارفع ملف M3U مباشرة\n2. تأكد من صحة البيانات`);
+            `تعذر الاتصال بمزود الخدمة.\n\nالحلول:\n1. ارفع ملف M3U مباشرة\n2. تأكد من صحة البيانات`);
         }
       }
     } else {
