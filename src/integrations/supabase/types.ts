@@ -35,6 +35,80 @@ export type Database = {
         }
         Relationships: []
       }
+      coupon_usage: {
+        Row: {
+          coupon_id: string
+          id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          id?: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          current_uses: number
+          discount_type: string
+          discount_value: number
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          plan_type: string | null
+          trial_extension_days: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          current_uses?: number
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_type?: string | null
+          trial_extension_days?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          current_uses?: number
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          plan_type?: string | null
+          trial_extension_days?: number | null
+        }
+        Relationships: []
+      }
       devices: {
         Row: {
           created_at: string
@@ -317,6 +391,105 @@ export type Database = {
         }
         Relationships: []
       }
+      reseller_transactions: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          description: string
+          id: string
+          metadata: Json | null
+          reseller_id: string
+          target_user_id: string | null
+          type: string
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          description?: string
+          id?: string
+          metadata?: Json | null
+          reseller_id: string
+          target_user_id?: string | null
+          type?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          description?: string
+          id?: string
+          metadata?: Json | null
+          reseller_id?: string
+          target_user_id?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      reseller_wallets: {
+        Row: {
+          balance_cents: number
+          commission_rate: number
+          created_at: string
+          id: string
+          is_frozen: boolean
+          total_earned_cents: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_cents?: number
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          is_frozen?: boolean
+          total_earned_cents?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_cents?: number
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          is_frozen?: boolean
+          total_earned_cents?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      security_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          device_id: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          device_id?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          device_id?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       streaming_sessions: {
         Row: {
           channel_name: string
@@ -421,7 +594,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "reseller"
       subscription_status: "active" | "expired" | "suspended"
     }
     CompositeTypes: {
@@ -550,7 +723,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "reseller"],
       subscription_status: ["active", "expired", "suspended"],
     },
   },
