@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle, Lock } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle, Lock, RotateCcw } from 'lucide-react';
 import { startSession, endSession } from '@/lib/analytics';
 import { fetchEPGForChannel, getCurrentProgram, getProgramProgress, type EPGProgram } from '@/lib/epg';
 import { getSecureStreamUrl } from '@/lib/stream-proxy';
+import { saveResumePosition, getResumePosition } from '@/lib/resume-playback';
 
 interface VideoPlayerProps {
   url: string;
