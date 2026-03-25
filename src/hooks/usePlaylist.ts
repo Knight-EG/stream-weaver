@@ -95,18 +95,25 @@ export function usePlaylist() {
         if (error) throw error;
 
         if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
-          // For Xtream provider-blocked: auto-convert to M3U URL and try client-side
+          // For Xtream provider-blocked: try client-side direct connection (user's IP may not be blocked)
           if (source.type === 'xtream' && data.code === 'PROVIDER_BLOCKED') {
-            const creds = source.credentials;
-            let base = creds.server.replace(/\/$/, '');
-            if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
-            const m3uUrl = `${base}/get.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&type=m3u_plus&output=ts`;
-            
+            console.log('Server blocked by provider, trying direct client-side Xtream API...');
             try {
-              const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
-              result = await fetchAndParseM3U(m3uUrl);
+              const { fetchXtreamPlaylist } = await import('@/lib/xtream');
+              result = await fetchXtreamPlaylist(source.credentials);
             } catch (clientErr) {
-              throw new Error(typeof data.error === 'string' ? data.error + '\n\nTip: Try downloading the M3U file from your provider and uploading it directly.' : 'Provider blocked');
+              // If client-side also fails, try M3U format as last resort
+              try {
+                const creds = source.credentials;
+                let base = creds.server.replace(/\/$/, '');
+                // Try HTTPS first (for mixed content safety), fallback to HTTP
+                if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
+                const m3uUrl = `${base}/get.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&type=m3u_plus&output=ts`;
+                const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+                result = await fetchAndParseM3U(m3uUrl);
+              } catch {
+                throw new Error('تعذر الاتصال بمزود الخدمة. جرب تحميل ملف M3U من المزود ورفعه مباشرة.');
+              }
             }
           } else {
             throw new Error(typeof data.error === 'string' ? data.error : 'Playlist provider request failed');
@@ -119,23 +126,20 @@ export function usePlaylist() {
       } catch (serverErr) {
         console.warn('Server-side parsing failed, falling back to client:', serverErr);
 
-        const serverMessage = serverErr instanceof Error ? serverErr.message : String(serverErr);
-        const shouldNotFallbackToClient = source.type === 'xtream' && (
-          serverMessage.includes('provider blocked both API and M3U') ||
-          serverMessage.includes('Tip: Try downloading')
-        );
-
-        if (shouldNotFallbackToClient) {
-          throw new Error(serverMessage);
-        }
-
-        const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
-        const { fetchXtreamPlaylist } = await import('@/lib/xtream');
-        
-        if (source.type === 'm3u') {
-          result = await fetchAndParseM3U(source.url);
-        } else {
-          result = await fetchXtreamPlaylist(source.credentials);
+        // Always try client-side fallback
+        try {
+          const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+          const { fetchXtreamPlaylist } = await import('@/lib/xtream');
+          
+          if (source.type === 'm3u') {
+            result = await fetchAndParseM3U(source.url);
+          } else {
+            result = await fetchXtreamPlaylist(source.credentials);
+          }
+        } catch (clientErr) {
+          // Re-throw the original server error with context
+          const msg = serverErr instanceof Error ? serverErr.message : String(serverErr);
+          throw new Error(msg);
         }
       }
       }
