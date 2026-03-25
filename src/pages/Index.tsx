@@ -4,6 +4,8 @@ import { usePlaylist } from '@/hooks/usePlaylist';
 import { useAccessGuard } from '@/hooks/useAccessGuard';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
+import { isTVDevice } from '@/lib/tv-detect';
+import { TVLayout } from '@/components/tv/TVLayout';
 import { PlaylistSetup } from '@/components/player/PlaylistSetup';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
