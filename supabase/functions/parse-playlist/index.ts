@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
           channels.push({
             id: `xt-${s.stream_id}`,
             name: s.name || `Channel ${s.stream_id}`,
-            url: `${base}/live/${username}/${password}/${s.stream_id}.ts`,
+            url: `${workingBase}/live/${username}/${password}/${s.stream_id}.ts`,
             logo: s.stream_icon || undefined,
             group: catMap.get(String(s.category_id)) || 'Live',
             tvgId: s.epg_channel_id || undefined,
