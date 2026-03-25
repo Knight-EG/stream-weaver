@@ -5,6 +5,12 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Channel } from '@/lib/m3u-parser';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { Radio, Film, Tv, Search, Settings, LogOut, Play, Star, X, ArrowLeft, User, Clock, Heart } from 'lucide-react';
+import tileLive from '@/assets/tv-tile-live.jpg';
+import tileMovies from '@/assets/tv-tile-movies.jpg';
+import tileSeries from '@/assets/tv-tile-series.jpg';
+import tileFavorites from '@/assets/tv-tile-favorites.jpg';
+import tileSearch from '@/assets/tv-tile-search.jpg';
+import tileSettings from '@/assets/tv-tile-settings.jpg';
 
 interface TVLayoutProps {
   channels: Channel[];
