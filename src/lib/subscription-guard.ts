@@ -71,7 +71,7 @@ export async function checkAccess(): Promise<AccessCheck> {
       reason: deviceResult.error || 'Device activation failed',
       trialActive,
       trialDaysLeft,
-      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at } : undefined,
+      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
     };
   }
 
@@ -79,7 +79,7 @@ export async function checkAccess(): Promise<AccessCheck> {
     allowed: true,
     trialActive: trialActive && !hasActiveSubscription,
     trialDaysLeft,
-    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at } : undefined,
+    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
     device: {
       id: deviceResult.device!.id,
       isActive: deviceResult.device!.is_active,
