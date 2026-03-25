@@ -37,6 +37,21 @@ export default function Index() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [autoLoaded, setAutoLoaded] = useState(false);
 
+  // Auto-load saved playlist on mount
+  useEffect(() => {
+    if (autoLoaded || playlist.channels.length > 0 || playlist.loading) return;
+    const saved = getSavedPlaylists();
+    const aid = getActivePlaylistId();
+    const active = saved.find(p => p.id === aid) || saved[0];
+    if (active) {
+      setAutoLoaded(true);
+      setActivePlaylistId(active.id);
+      playlist.loadPlaylist(active.source);
+    } else {
+      setAutoLoaded(true);
+    }
+  }, [autoLoaded, playlist.channels.length, playlist.loading]);
+
   const handleSelectChannel = useCallback((ch: Channel) => { setActiveChannel(ch); }, []);
 
   // Filtered by type
