@@ -662,6 +662,16 @@ const tr: TranslationKeys = {
   couponActive: 'Aktif',
   couponExpired: 'Süresi Dolmuş',
   
+  moviesTitle: 'Filmler',
+  moviesSearchPlaceholder: 'Film ara...',
+  moviesEmpty: 'Film bulunamadı',
+  seriesTitle: 'Diziler',
+  seriesSearchPlaceholder: 'Dizi ara...',
+  seriesEmpty: 'Dizi bulunamadı',
+  allCategories: 'Tümü',
+  sortByName: 'İsme Göre',
+  sortByCategory: 'Kategoriye Göre',
+  
   timeJustNow: 'Az önce',
   timeMinAgo: 'dk önce',
   timeHoursAgo: 'sa önce',
