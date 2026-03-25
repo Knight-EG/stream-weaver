@@ -57,8 +57,19 @@ export function parseM3U(content: string): ParsedPlaylist {
 }
 
 export async function fetchAndParseM3U(url: string): Promise<ParsedPlaylist> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.status}`);
-  const text = await res.text();
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    // If HTTPS fails, try HTTP fallback
+    if (url.startsWith('https://')) {
+      const httpUrl = 'http://' + url.slice('https://'.length);
+      res = await fetch(httpUrl);
+    } else {
+      throw err;
+    }
+  }
+  if (!res!.ok) throw new Error(`Failed to fetch playlist: ${res!.status}`);
+  const text = await res!.text();
   return parseM3U(text);
 }

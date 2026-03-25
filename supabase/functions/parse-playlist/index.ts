@@ -67,22 +67,30 @@ function jsonResponse(payload: unknown, status = 200) {
 
 async function fetchUpstreamText(url: string): Promise<{ response: Response; text: string }> {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
     const response = await fetch(url, {
       headers: upstreamHeaders,
       redirect: 'follow',
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     const text = await response.text();
     return { response, text };
   } catch (error) {
     const httpFallbackUrl = toHttpUrl(url);
 
-    if (httpFallbackUrl && isTlsCertificateError(error)) {
-      console.warn(`TLS certificate error for ${url}. Retrying over HTTP fallback.`);
+    if (httpFallbackUrl && (isTlsCertificateError(error) || (error instanceof DOMException && error.name === 'AbortError'))) {
+      console.warn(`Fetch failed for ${url} (${error instanceof Error ? error.message : 'timeout'}). Retrying over HTTP.`);
+      const controller2 = new AbortController();
+      const timeout2 = setTimeout(() => controller2.abort(), 25000);
       const response = await fetch(httpFallbackUrl, {
         headers: upstreamHeaders,
         redirect: 'follow',
+        signal: controller2.signal,
       });
+      clearTimeout(timeout2);
 
       const text = await response.text();
       return { response, text };
