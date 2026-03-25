@@ -150,36 +150,39 @@ Deno.serve(async (req) => {
         fetchUpstreamText(`${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`),
       ]);
 
-      if (!catsRes.response.ok) {
-        throw new Error(`Failed to fetch Xtream categories (${catsRes.response.status}). ${looksLikeHtml(catsRes.text) ? 'The provider returned HTML instead of JSON.' : 'Unexpected upstream response.'}`);
+      const apiWorked = catsRes.response.ok && streamsRes.response.ok;
+
+      if (apiWorked) {
+        const categories = safeJsonParse<any[]>(catsRes.text);
+        const streams = safeJsonParse<any[]>(streamsRes.text);
+
+        if (Array.isArray(categories) && Array.isArray(streams)) {
+          const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
+          const channels: Channel[] = streams.map((s: any) => ({
+            id: `xt-${s.stream_id}`,
+            name: s.name,
+            url: `${base}/live/${username}/${password}/${s.stream_id}.m3u8`,
+            logo: s.stream_icon || undefined,
+            group: catMap.get(s.category_id) || 'Uncategorized',
+            type: 'live' as const,
+          }));
+          result = {
+            channels,
+            categories: Array.from(new Set(channels.map(c => c.group!))).filter(Boolean).sort(),
+          };
+        }
       }
 
-      if (!streamsRes.response.ok) {
-        throw new Error(`Failed to fetch Xtream streams (${streamsRes.response.status}). ${looksLikeHtml(streamsRes.text) ? 'The provider returned HTML instead of JSON.' : 'Unexpected upstream response.'}`);
+      // Fallback: fetch as M3U playlist if API failed
+      if (!result) {
+        console.log('Xtream API failed, falling back to M3U format');
+        const m3uUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+        const m3uRes = await fetchUpstreamText(m3uUrl);
+        if (!m3uRes.response.ok) {
+          throw new Error(`Xtream provider blocked both API and M3U requests (${m3uRes.response.status}). The provider may be restricting server access. Try using M3U URL directly.`);
+        }
+        result = parseM3U(m3uRes.text);
       }
-
-      const categories = safeJsonParse<any[]>(catsRes.text);
-      const streams = safeJsonParse<any[]>(streamsRes.text);
-
-      if (!Array.isArray(categories) || !Array.isArray(streams)) {
-        throw new Error('Xtream provider returned an unexpected payload shape.');
-      }
-
-      const catMap = new Map(categories.map((c: any) => [c.category_id, c.category_name]));
-
-      const channels: Channel[] = streams.map((s: any) => ({
-        id: `xt-${s.stream_id}`,
-        name: s.name,
-        url: `${base}/live/${username}/${password}/${s.stream_id}.m3u8`,
-        logo: s.stream_icon || undefined,
-        group: catMap.get(s.category_id) || 'Uncategorized',
-        type: 'live' as const,
-      }));
-
-      result = {
-        channels,
-        categories: Array.from(new Set(channels.map(c => c.group!))).filter(Boolean).sort(),
-      };
     } else {
       return new Response(JSON.stringify({ error: 'Invalid type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
