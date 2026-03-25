@@ -6,6 +6,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
 import { isTVDevice } from '@/lib/tv-detect';
 import { TVLayout } from '@/components/tv/TVLayout';
+import { TVActivationScreen } from '@/components/tv/TVActivationScreen';
 import { type XtreamAccountInfo, fetchXtreamAccountInfo } from '@/lib/xtream';
 import { PlaylistManager, getSavedPlaylists, getActivePlaylistId, setActivePlaylistId } from '@/components/player/PlaylistManager';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
