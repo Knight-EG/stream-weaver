@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bell, Check, CheckCheck, Monitor, CreditCard, AlertTriangle, Info, Clock, X } from 'lucide-react';
 import { useNotifications, type Notification } from '@/hooks/useNotifications';
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -7,6 +8,7 @@ const typeIcons: Record<string, React.ReactNode> = {
   subscription: <CreditCard className="w-4 h-4 text-success" />,
   warning: <AlertTriangle className="w-4 h-4 text-warning" />,
   error: <AlertTriangle className="w-4 h-4 text-destructive" />,
+  trial: <Clock className="w-4 h-4 text-warning" />,
   info: <Info className="w-4 h-4 text-primary" />,
 };
 
@@ -107,6 +109,15 @@ export function NotificationBell() {
               ))
             )}
           </div>
+
+          {/* Footer link */}
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="block text-center text-xs text-primary font-medium py-2.5 border-t border-border hover:bg-secondary/50 transition-colors"
+          >
+            View all notifications →
+          </Link>
         </div>
       )}
     </div>

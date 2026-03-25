@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhiteLabelSettings } from '@/components/admin/WhiteLabelSettings';
+import { TrialSettings } from '@/components/admin/TrialSettings';
 
-type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics' | 'branding';
+type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics' | 'branding' | 'trial';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('users');
@@ -68,6 +69,7 @@ export default function Admin() {
     { id: 'subscriptions', label: 'Subs', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'branding', label: 'Brand', icon: <Palette className="w-4 h-4" /> },
+    { id: 'trial', label: 'Trial', icon: <CreditCard className="w-4 h-4" /> },
   ];
 
   return (
@@ -290,6 +292,9 @@ export default function Admin() {
 
       {/* Branding Tab */}
       {tab === 'branding' && <WhiteLabelSettings />}
+
+      {/* Trial Tab */}
+      {tab === 'trial' && <TrialSettings />}
     </div>
   );
 }
