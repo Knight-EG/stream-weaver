@@ -574,6 +574,8 @@ const tr: TranslationKeys = {
   accessManageDevices: 'Cihazları Yönet',
   accessTrialRemaining: 'gün kaldı',
   accessActivateMessage: 'Aboneliğinizi etkinleştirmek için sağlayıcınızla iletişime geçin.',
+  accessAccountSuspended: 'Hesap Geçici Olarak Askıya Alındı',
+  accessBanExpires: 'Erişim şu tarihte yeniden sağlanacak',
   
   settingsTitle: 'Ayarlar',
   settingsProfile: 'Profil',
