@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSpatialNavigation } from '@/hooks/useSpatialNavigation';
 import { usePlaylist } from '@/hooks/usePlaylist';
 import { useAccessGuard } from '@/hooks/useAccessGuard';
