@@ -63,6 +63,30 @@ export default function Admin() {
     loadData();
   }
 
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [grantUserId, setGrantUserId] = useState('');
+  const [grantPlanType, setGrantPlanType] = useState<'standard' | 'lifetime'>('standard');
+  const [grantDays, setGrantDays] = useState(30);
+  const [grantMaxDevices, setGrantMaxDevices] = useState(3);
+
+  async function grantSubscription() {
+    if (!grantUserId) return;
+    const expiresAt = grantPlanType === 'lifetime'
+      ? new Date('2099-12-31T23:59:59Z').toISOString()
+      : new Date(Date.now() + grantDays * 86400000).toISOString();
+
+    await supabase.from('subscriptions').insert({
+      user_id: grantUserId,
+      status: 'active',
+      plan_type: grantPlanType,
+      expires_at: expiresAt,
+      max_devices: grantMaxDevices,
+    } as any);
+    setShowGrantModal(false);
+    setGrantUserId('');
+    loadData();
+  }
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
     { id: 'devices', label: 'Devices', icon: <Monitor className="w-4 h-4" /> },
