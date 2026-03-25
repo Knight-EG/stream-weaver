@@ -336,6 +336,16 @@ const en: TranslationKeys = {
   couponActive: 'Active',
   couponExpired: 'Expired',
   
+  moviesTitle: 'Movies',
+  moviesSearchPlaceholder: 'Search movies...',
+  moviesEmpty: 'No movies found',
+  seriesTitle: 'Series',
+  seriesSearchPlaceholder: 'Search series...',
+  seriesEmpty: 'No series found',
+  allCategories: 'All',
+  sortByName: 'Sort by Name',
+  sortByCategory: 'Sort by Category',
+  
   timeJustNow: 'Just now',
   timeMinAgo: 'min ago',
   timeHoursAgo: 'h ago',
