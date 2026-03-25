@@ -113,6 +113,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       playlist_cache: {
         Row: {
           cache_key: string
@@ -156,6 +189,7 @@ export type Database = {
           email: string | null
           id: string
           max_devices: number
+          trial_ends_at: string | null
           updated_at: string
           user_id: string
         }
@@ -165,6 +199,7 @@ export type Database = {
           email?: string | null
           id?: string
           max_devices?: number
+          trial_ends_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -174,6 +209,7 @@ export type Database = {
           email?: string | null
           id?: string
           max_devices?: number
+          trial_ends_at?: string | null
           updated_at?: string
           user_id?: string
         }

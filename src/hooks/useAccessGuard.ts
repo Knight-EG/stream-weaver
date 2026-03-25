@@ -3,8 +3,7 @@ import { checkAccess, type AccessCheck } from '@/lib/subscription-guard';
 import { useAuth } from './useAuth';
 
 /**
- * Hook to check user access (subscription + device) on mount.
- * Returns loading state, access result, and a refresh function.
+ * Hook to check user access (trial/subscription + device) on mount.
  */
 export function useAccessGuard() {
   const { user } = useAuth();
