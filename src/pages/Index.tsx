@@ -4,6 +4,8 @@ import { usePlaylist } from '@/hooks/usePlaylist';
 import { useAccessGuard } from '@/hooks/useAccessGuard';
 import { useLanguage } from '@/i18n/LanguageContext';
 import type { Channel } from '@/lib/m3u-parser';
+import { isTVDevice } from '@/lib/tv-detect';
+import { TVLayout } from '@/components/tv/TVLayout';
 import { PlaylistSetup } from '@/components/player/PlaylistSetup';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
@@ -135,6 +137,11 @@ export default function Index() {
   }
 
   if (playlist.channels.length === 0) return <PlaylistSetup onSubmit={playlist.loadPlaylist} loading={playlist.loading} error={playlist.error} />;
+
+  // TV Mode - Netflix/Shahid style interface
+  if (isTVDevice()) {
+    return <TVLayout channels={playlist.channels} favorites={playlist.favorites} onToggleFavorite={playlist.toggleFavorite} />;
+  }
 
   // Playing a channel/movie/episode fullscreen
   if (activeChannel) {
