@@ -257,6 +257,7 @@ export type Database = {
           expires_at: string
           id: string
           max_devices: number
+          plan_type: string
           starts_at: string
           status: Database["public"]["Enums"]["subscription_status"]
           updated_at: string
@@ -267,6 +268,7 @@ export type Database = {
           expires_at: string
           id?: string
           max_devices?: number
+          plan_type?: string
           starts_at?: string
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
@@ -277,6 +279,7 @@ export type Database = {
           expires_at?: string
           id?: string
           max_devices?: number
+          plan_type?: string
           starts_at?: string
           status?: Database["public"]["Enums"]["subscription_status"]
           updated_at?: string
