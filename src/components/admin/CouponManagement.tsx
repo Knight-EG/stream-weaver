@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Loader2, Trash2, Copy, Check } from 'lucide-react';
+import { Plus, Loader2, Trash2, Copy, Check, Ban } from 'lucide-react';
 
 export function CouponManagement() {
   const { t } = useLanguage();
