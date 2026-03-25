@@ -70,6 +70,8 @@ type TranslationKeys = {
   accessManageDevices: string;
   accessTrialRemaining: string;
   accessActivateMessage: string;
+  accessAccountSuspended: string;
+  accessBanExpires: string;
   
   // Settings
   settingsTitle: string;
