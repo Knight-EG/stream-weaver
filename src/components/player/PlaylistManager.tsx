@@ -340,21 +340,49 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
                 <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable" data-focusable="true"
                   onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }} />
-                {server && username && password && (
-                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      💡 لو الاتصال فشل، حمّل ملف M3U وارفعه في تبويب "File"
-                    </p>
-                    <a
-                      href={`${(() => { let s = server.trim().replace(/\/$/, ''); if (!/^https?:\/\//i.test(s)) s = 'http://' + s; return s; })()}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                    >
-                      <Download className="w-4 h-4" /> تحميل ملف M3U
-                    </a>
-                  </div>
-                )}
+                {server && username && password && (() => {
+                  let base = server.trim().replace(/\/$/, '');
+                  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
+                  const m3uUrl1 = `${base}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`;
+                  const m3uUrl2 = `${base}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus`;
+                  return (
+                    <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        💡 لو الاتصال فشل، حمّل ملف M3U وارفعه في تبويب "File"
+                      </p>
+                      <div className="flex gap-2">
+                        <a
+                          href={m3uUrl1}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download="playlist.m3u"
+                          className="flex-1 py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                        >
+                          <Download className="w-4 h-4" /> تحميل M3U
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(m3uUrl1);
+                            alert('تم نسخ الرابط! الصقه في المتصفح لتحميل الملف');
+                          }}
+                          className="px-3 py-2.5 rounded-lg bg-muted text-muted-foreground text-sm hover:text-foreground transition-colors"
+                          title="نسخ الرابط"
+                        >
+                          📋
+                        </button>
+                      </div>
+                      <details className="text-xs">
+                        <summary className="text-muted-foreground cursor-pointer hover:text-foreground">لو مش شغال، جرب الرابط البديل</summary>
+                        <div className="mt-2 space-y-1">
+                          <a href={m3uUrl2} target="_blank" rel="noopener noreferrer" download="playlist.m3u"
+                            className="block text-primary underline break-all hover:no-underline">رابط بديل (بدون output=ts)</a>
+                          <p className="text-muted-foreground break-all select-all mt-1 bg-muted p-2 rounded text-[10px]">{m3uUrl1}</p>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
