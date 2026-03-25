@@ -61,7 +61,7 @@ export function usePlaylist() {
   }, []);
 
   const loadPlaylist = useCallback(async (source: PlaylistSource) => {
-    setState(s => ({ ...s, loading: true, error: null }));
+    setState(s => ({ ...s, loading: true, error: null, channels: [], categories: [], categoryIndex: new Map(), selectedCategory: null }));
     try {
       const cacheKey = source.type === 'm3u' ? source.url : source.type === 'xtream' ? `${source.credentials.server}:${source.credentials.username}` : `file-${Date.now()}`;
       

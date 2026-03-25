@@ -156,6 +156,7 @@ export default function Index() {
     return (
       <PlaylistManager
         onLoadPlaylist={(source) => {
+          setActiveChannel(null);
           playlist.loadPlaylist(source);
           setShowPlaylistManager(false);
         }}
