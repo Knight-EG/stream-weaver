@@ -46,6 +46,7 @@ const App = () => (
               <Route path="/reseller" element={<ProtectedRoute><ResellerPanel /></ProtectedRoute>} />
               <Route path="/movies" element={<ProtectedRoute><Movies /></ProtectedRoute>} />
               <Route path="/series" element={<ProtectedRoute><Series /></ProtectedRoute>} />
+              <Route path="/activate" element={<Activate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
