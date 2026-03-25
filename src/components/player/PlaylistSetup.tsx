@@ -171,6 +171,8 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
                   </a>
                 </div>
               )}
+            </>
+          )}
 
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 space-y-2">
