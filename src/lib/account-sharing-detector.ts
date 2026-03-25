@@ -51,22 +51,32 @@ export async function detectAccountSharing(): Promise<SharingDetectionResult> {
 
   const strikeCount = recentStrikes?.length || 0;
 
-  // ── Check 1: Multiple active devices ──
+  // ── Get user's actual device limit ──
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('max_devices')
+    .eq('user_id', user.id)
+    .single();
+
+  const maxDevices = profile?.max_devices || 3;
+
+  // ── Check 1: Multiple active devices exceeding limit ──
   const { data: devices } = await supabase
     .from('devices')
     .select('device_id, last_seen_at, platform, is_active, ip_address')
     .eq('user_id', user.id)
     .eq('is_active', true);
 
-  if (devices && devices.length > 1) {
+  if (devices && devices.length > maxDevices) {
     const newStrikes = strikeCount + 1;
     await logSecurityEvent(user.id, 'multiple_devices_detected', 'critical', {
       device_count: devices.length,
+      max_allowed: maxDevices,
       current_device: currentDeviceId,
       devices: devices.map(d => ({ id: d.device_id, platform: d.platform })),
       strike: newStrikes,
     });
-    await sendSecurityNotification(user.id, 'multiple_devices', newStrikes);
+    await sendSecurityNotification(user.id, 'multiple_devices', newStrikes, maxDevices);
 
     if (newStrikes >= STRIKE_THRESHOLD_BAN) {
       await applyTempBan(user.id, TEMP_BAN_HOURS);
@@ -80,7 +90,7 @@ export async function detectAccountSharing(): Promise<SharingDetectionResult> {
 
     return {
       suspicious: true,
-      reason: `Multiple active devices detected (${devices.length}). Only 1 device allowed. Strike ${newStrikes}/${STRIKE_THRESHOLD_BAN}.`,
+      reason: `Multiple active devices detected (${devices.length}). Only ${maxDevices} device(s) allowed. Strike ${newStrikes}/${STRIKE_THRESHOLD_BAN}.`,
       action: newStrikes >= STRIKE_THRESHOLD_BLOCK ? 'block' : 'warn',
     };
   }
