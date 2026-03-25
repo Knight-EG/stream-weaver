@@ -311,7 +311,7 @@ export default function Activate() {
         {/* Step: Done */}
         {step === 'done' && (
           <div className="text-center space-y-6">
-            <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto" />
+            <CheckCircle2 className="w-20 h-20 text-primary mx-auto" />
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-foreground">TV Activated!</h2>
               <p className="text-muted-foreground">
