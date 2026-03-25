@@ -351,8 +351,11 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
               />
             ) : (
               <div className="space-y-3">
-                <input type="url" placeholder="http://provider.example.com" value={server} onChange={e => setServer(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable" data-focusable="true" />
+                <div className="space-y-1.5">
+                  <input type="url" placeholder="http://provider.example.com:PORT" value={server} onChange={e => setServer(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable" data-focusable="true" />
+                  <p className="text-[11px] text-muted-foreground">⚠️ اكتب البورت في الرابط — مثال: <span className="font-mono text-foreground">http://example.com:8080</span></p>
+                </div>
                 <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary tv-focusable" data-focusable="true" />
                 <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
