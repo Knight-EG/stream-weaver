@@ -242,6 +242,32 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
         </div>
       )}
 
+      {/* Resume Prompt */}
+      {showResumePrompt && resumePosition && !loading && !error && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur border border-border rounded-xl p-4 flex items-center gap-3 shadow-lg z-20">
+          <RotateCcw className="w-5 h-5 text-primary flex-shrink-0" />
+          <div className="text-sm">
+            <p className="text-foreground font-medium">Resume from {Math.floor(resumePosition / 60)}:{String(Math.floor(resumePosition % 60)).padStart(2, '0')}?</p>
+          </div>
+          <button
+            onClick={() => {
+              const v = videoRef.current;
+              if (v) v.currentTime = resumePosition;
+              setShowResumePrompt(false);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold"
+          >
+            Resume
+          </button>
+          <button
+            onClick={() => setShowResumePrompt(false)}
+            className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs"
+          >
+            Start Over
+          </button>
+        </div>
+      )}
+
       <div className={`absolute inset-0 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-player-bg/80 to-transparent p-4">
           <div className="flex items-center gap-3">
