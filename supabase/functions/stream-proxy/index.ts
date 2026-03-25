@@ -86,18 +86,27 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // Check subscription
+      // Check trial / subscription access
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('trial_ends_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const nowIso = new Date().toISOString();
+      const hasTrialAccess = !!profile?.trial_ends_at && profile.trial_ends_at > nowIso;
+
       const { data: sub } = await adminClient
         .from('subscriptions')
-        .select('id')
+        .select('id, plan_type, expires_at')
         .eq('user_id', userId)
         .eq('status', 'active')
-        .gte('expires_at', new Date().toISOString())
+        .or(`plan_type.eq.lifetime,expires_at.gte.${nowIso}`)
         .limit(1)
         .maybeSingle();
 
-      if (!sub) {
-        return new Response(JSON.stringify({ error: 'No active subscription' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (!sub && !hasTrialAccess) {
+        return new Response(JSON.stringify({ error: 'No active subscription or trial access' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       // Check device is active and belongs to user
