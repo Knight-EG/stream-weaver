@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Radio, Server, Loader2, Upload, FileText, Download } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
-
+import { downloadXtreamM3UFile } from '@/lib/xtream-m3u';
 interface PlaylistSetupProps {
   onSubmit: (source: PlaylistSource) => void;
   loading: boolean;
