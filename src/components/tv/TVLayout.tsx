@@ -348,30 +348,29 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
 
 /* ═══ Home Card Tile ═══ */
 function HomeCard({
-  icon,
+  image,
   label,
   count,
-  color,
   onClick,
 }: {
-  icon: React.ReactNode;
+  image: string;
   label: string;
   count?: number;
-  color: string;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`relative rounded-3xl bg-gradient-to-br ${color} p-8 flex flex-col items-center justify-center gap-4 min-h-[200px] tv-focusable transition-all duration-300 hover:scale-105 focus:scale-110 focus:ring-4 focus:ring-white/30 focus:shadow-[0_0_40px_rgba(255,255,255,0.2)] group`}
+      className="relative rounded-3xl overflow-hidden min-h-[200px] tv-focusable transition-all duration-300 hover:scale-105 focus:scale-110 focus:ring-4 focus:ring-primary/40 focus:shadow-[0_0_50px_hsl(var(--primary)/0.3)] group"
       data-focusable="true"
     >
-      <div className="text-white/90 group-focus:text-white transition-colors">
-        {icon}
+      <img src={image} alt={label} className="absolute inset-0 w-full h-full object-cover group-focus:scale-110 transition-transform duration-500" loading="lazy" width={640} height={512} />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+      <div className="relative z-10 flex flex-col items-center justify-end h-full p-6 pb-8">
+        <p className="text-2xl font-bold text-white drop-shadow-lg">{label}</p>
       </div>
-      <p className="text-2xl font-bold text-white">{label}</p>
       {count !== undefined && (
-        <span className="absolute top-4 end-4 px-3 py-1 rounded-full bg-black/30 text-sm font-medium text-white/80">
+        <span className="absolute top-4 end-4 z-10 px-3 py-1 rounded-full bg-black/50 backdrop-blur-sm text-sm font-medium text-white/90">
           {count}
         </span>
       )}
