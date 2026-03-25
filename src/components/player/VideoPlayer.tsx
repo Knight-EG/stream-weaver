@@ -83,11 +83,8 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
       }
     });
 
-    getSecureStreamUrl(id, activeUrl).then(secureUrl => {
-      if (!cancelled) setResolvedUrl(secureUrl);
-    }).catch(() => {
-      if (!cancelled) setResolvedUrl(activeUrl);
-    });
+    // Use direct URL for now - stream proxy can be enabled later
+    setResolvedUrl(activeUrl);
 
     return () => { cancelled = true; };
   }, [activeUrl, channelId]);
