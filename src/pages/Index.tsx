@@ -137,7 +137,30 @@ export default function Index() {
     );
   }
 
-  if (playlist.channels.length === 0) return <PlaylistSetup onSubmit={playlist.loadPlaylist} loading={playlist.loading} error={playlist.error} />;
+  if (playlist.channels.length === 0 || showPlaylistManager) {
+    return (
+      <PlaylistManager
+        onLoadPlaylist={(source) => {
+          playlist.loadPlaylist(source);
+          setShowPlaylistManager(false);
+        }}
+        loading={playlist.loading}
+        error={playlist.error}
+        currentChannelCount={playlist.channels.length}
+      />
+    );
+  }
+
+  // Auto-load active playlist on mount
+  if (playlist.channels.length === 0) {
+    const saved = getSavedPlaylists();
+    const activeId = getActivePlaylistId();
+    const active = saved.find(p => p.id === activeId) || saved[0];
+    if (active) {
+      playlist.loadPlaylist(active.source);
+      setActivePlaylistId(active.id);
+    }
+  }
 
   // TV Mode - Netflix/Shahid style interface
   if (isTVDevice()) {
