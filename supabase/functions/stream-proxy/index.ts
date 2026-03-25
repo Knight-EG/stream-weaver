@@ -40,7 +40,19 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    let action = url.searchParams.get('action');
+
+    if (!action && req.method === 'POST') {
+      try {
+        const clonedReq = req.clone();
+        const body = await clonedReq.json();
+        if (typeof body?.action === 'string') {
+          action = body.action;
+        }
+      } catch {
+        // ignore invalid JSON here; main handler will validate later
+      }
+    }
 
     // Action 1: Generate a stream token (requires auth)
     if (action === 'get_token') {
@@ -55,12 +67,12 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } }
       );
 
-      const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(authHeader.replace('Bearer ', ''));
-      if (claimsError || !claimsData?.claims) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const userId = claimsData.claims.sub;
+      const userId = user.id;
       const body = await req.json();
       const { channel_id, channel_url, device_id } = body;
 
