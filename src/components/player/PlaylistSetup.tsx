@@ -38,6 +38,25 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
     reader.readAsText(file);
   };
 
+  const handleDownloadM3u = async () => {
+    if (!server || !username || !password || downloadingM3u) return;
+    setDownloadingM3u(true);
+    try {
+      await downloadXtreamM3UFile({
+        server: server.trim(),
+        username: username.trim(),
+        password: password.trim(),
+      });
+      toast.success('تم تنزيل ملف M3U');
+    } catch (err) {
+      toast.error('فشل تنزيل ملف M3U', {
+        description: err instanceof Error ? err.message : 'تعذر إنشاء الملف من Xtream API',
+      });
+    } finally {
+      setDownloadingM3u(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
