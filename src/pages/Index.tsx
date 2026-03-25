@@ -49,6 +49,12 @@ export default function Index() {
       setAutoLoaded(true);
       setActivePlaylistId(active.id);
       playlist.loadPlaylist(active.source);
+      // Fetch xtream account info if applicable
+      if (active.source.type === 'xtream') {
+        fetchXtreamAccountInfo(active.source.credentials).then(setXtreamAccount);
+      } else {
+        setXtreamAccount(null);
+      }
     } else {
       setAutoLoaded(true);
     }
