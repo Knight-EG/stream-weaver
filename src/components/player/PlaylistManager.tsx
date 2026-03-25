@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Radio, Server, Upload, Trash2, Play, Plus, Edit2, Check, X, FileText, List, Download } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
-import { downloadXtreamM3UFile } from '@/lib/xtream-m3u';
+import { buildM3uDownloadUrls } from '@/lib/xtream-m3u';
 export interface SavedPlaylist {
   id: string;
   name: string;
