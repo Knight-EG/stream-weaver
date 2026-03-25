@@ -57,9 +57,12 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
 
   const activeId = getActivePlaylistId();
 
-  // Migrate old single-source to multi-playlist
+  // Migrate old single-source to multi-playlist & auto-load active
   useEffect(() => {
-    if (playlists.length === 0) {
+    let list = playlists;
+
+    // Migration from old format
+    if (list.length === 0) {
       try {
         const oldSource = localStorage.getItem('iptv_saved_source');
         if (oldSource) {
@@ -70,16 +73,26 @@ export function PlaylistManager({ onLoadPlaylist, onPlaylistActivated, loading, 
             source,
             addedAt: Date.now(),
           };
-          const newList = [migrated];
-          setPlaylists(newList);
-          savePlaylistList(newList);
+          list = [migrated];
+          setPlaylists(list);
+          savePlaylistList(list);
           setActivePlaylistId(migrated.id);
           localStorage.removeItem('iptv_saved_source');
           setShowAddForm(false);
         }
       } catch {}
     }
-  }, []);
+
+    // Auto-load active playlist if we have playlists but no channels loaded
+    if (list.length > 0 && (currentChannelCount === 0 || currentChannelCount === undefined) && !loading) {
+      const aid = getActivePlaylistId();
+      const active = list.find(p => p.id === aid) || list[0];
+      if (active && active.source.type !== 'file') {
+        setActivePlaylistId(active.id);
+        onLoadPlaylist(active.source);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = (source?: PlaylistSource) => {
     const finalSource = source || (
