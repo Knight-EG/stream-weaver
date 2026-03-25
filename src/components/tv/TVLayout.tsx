@@ -165,7 +165,7 @@ export function TVLayout({ channels, favorites, onToggleFavorite }: TVLayoutProp
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder={t('searchPlaceholder')}
+                placeholder={t('playerSearchPlaceholder')}
                 className="w-full pl-16 pr-16 py-5 rounded-2xl bg-card border-2 border-border text-2xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary tv-focusable"
                 data-focusable="true"
               />
