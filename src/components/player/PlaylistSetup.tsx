@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radio, Server, Loader2 } from 'lucide-react';
+import { Radio, Server, Loader2, Upload, FileText } from 'lucide-react';
 import type { PlaylistSource } from '@/hooks/usePlaylist';
 
 interface PlaylistSetupProps {
@@ -9,11 +9,12 @@ interface PlaylistSetupProps {
 }
 
 export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) {
-  const [mode, setMode] = useState<'m3u' | 'xtream'>('m3u');
+  const [mode, setMode] = useState<'m3u' | 'xtream' | 'file'>('m3u');
   const [m3uUrl, setM3uUrl] = useState('');
   const [server, setServer] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [fileName, setFileName] = useState('');
 
   const handleSubmit = () => {
     if (mode === 'm3u' && m3uUrl.trim()) {
@@ -21,6 +22,18 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
     } else if (mode === 'xtream' && server && username && password) {
       onSubmit({ type: 'xtream', credentials: { server: server.trim(), username: username.trim(), password: password.trim() } });
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result as string;
+      onSubmit({ type: 'file', content });
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -34,7 +47,7 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
           <p className="text-muted-foreground">Enter your playlist source to get started</p>
         </div>
 
-        <div className="flex rounded-lg bg-muted p-1 gap-1">
+        <div className="flex rounded-lg bg-muted p-1 gap-1 flex-wrap">
           <button
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium tv-focusable transition-colors ${
               mode === 'm3u' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
@@ -53,10 +66,48 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
           >
             <Server className="w-4 h-4" /> Xtream Codes
           </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium tv-focusable transition-colors ${
+              mode === 'file' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setMode('file')}
+            data-focusable="true"
+          >
+            <Upload className="w-4 h-4" /> Upload File
+          </button>
         </div>
 
         <div className="space-y-4">
-          {mode === 'm3u' ? (
+          {mode === 'file' ? (
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-foreground">Upload M3U File</label>
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer relative">
+                <input
+                  type="file"
+                  accept=".m3u,.m3u8,.txt"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  data-focusable="true"
+                />
+                {fileName ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <FileText className="w-8 h-8 text-primary" />
+                    <p className="text-sm font-medium text-foreground">{fileName}</p>
+                    <p className="text-xs text-muted-foreground">Processing...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <p className="text-sm text-foreground">Click to upload M3U file</p>
+                    <p className="text-xs text-muted-foreground">.m3u, .m3u8, .txt</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                💡 If your provider URL downloads a file instead of playing, use this option to upload it directly.
+              </p>
+            </div>
+          ) : mode === 'm3u' ? (
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Playlist URL</label>
               <input
@@ -108,16 +159,27 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
             </>
           )}
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 space-y-2">
+              <p className="text-destructive text-sm whitespace-pre-line">{error}</p>
+              {mode !== 'file' && error.toLowerCase().includes('blocked') && (
+                <button onClick={() => setMode('file')} className="text-xs text-primary underline hover:no-underline">
+                  Try uploading the M3U file instead →
+                </button>
+              )}
+            </div>
+          )}
 
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable disabled:opacity-50 flex items-center justify-center gap-2"
-            data-focusable="true"
-          >
-            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</> : 'Connect'}
-          </button>
+          {mode !== 'file' && (
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="w-full py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable disabled:opacity-50 flex items-center justify-center gap-2"
+              data-focusable="true"
+            >
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</> : 'Connect'}
+            </button>
+          )}
         </div>
       </div>
     </div>

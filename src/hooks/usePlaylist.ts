@@ -6,7 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type PlaylistSource =
   | { type: 'm3u'; url: string }
-  | { type: 'xtream'; credentials: XtreamCredentials };
+  | { type: 'xtream'; credentials: XtreamCredentials }
+  | { type: 'file'; content: string };
 
 interface PlaylistState {
   channels: Channel[];
@@ -60,7 +61,7 @@ export function usePlaylist() {
   const loadPlaylist = useCallback(async (source: PlaylistSource) => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
-      const cacheKey = source.type === 'm3u' ? source.url : `${source.credentials.server}:${source.credentials.username}`;
+      const cacheKey = source.type === 'm3u' ? source.url : source.type === 'xtream' ? `${source.credentials.server}:${source.credentials.username}` : `file-${Date.now()}`;
       
       const cached = getCachedPlaylist(cacheKey);
       if (cached) {
@@ -77,6 +78,12 @@ export function usePlaylist() {
       }
 
       let result: ParsedPlaylist;
+
+      // File upload: parse directly on client
+      if (source.type === 'file') {
+        const { parseM3U } = await import('@/lib/m3u-parser');
+        result = parseM3U(source.content);
+      } else {
       try {
         const body = source.type === 'm3u'
           ? { type: 'm3u', url: source.url }
@@ -86,18 +93,34 @@ export function usePlaylist() {
         if (error) throw error;
 
         if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
-          throw new Error(typeof data.error === 'string' ? data.error : 'Playlist provider request failed');
+          // For Xtream provider-blocked: auto-convert to M3U URL and try client-side
+          if (source.type === 'xtream' && data.code === 'PROVIDER_BLOCKED') {
+            const creds = source.credentials;
+            let base = creds.server.replace(/\/$/, '');
+            if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
+            const m3uUrl = `${base}/get.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&type=m3u_plus&output=ts`;
+            
+            try {
+              const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+              result = await fetchAndParseM3U(m3uUrl);
+            } catch (clientErr) {
+              throw new Error(typeof data.error === 'string' ? data.error + '\n\nTip: Try downloading the M3U file from your provider and uploading it directly.' : 'Provider blocked');
+            }
+          } else {
+            throw new Error(typeof data.error === 'string' ? data.error : 'Playlist provider request failed');
+          }
         }
 
-        result = data as ParsedPlaylist;
+        if (!result!) {
+          result = data as ParsedPlaylist;
+        }
       } catch (serverErr) {
         console.warn('Server-side parsing failed, falling back to client:', serverErr);
 
         const serverMessage = serverErr instanceof Error ? serverErr.message : String(serverErr);
         const shouldNotFallbackToClient = source.type === 'xtream' && (
-          serverMessage.includes('provider blocked both API and M3U requests') ||
-          serverMessage.includes('provider returned HTML instead of JSON') ||
-          serverMessage.includes('provider returned invalid JSON')
+          serverMessage.includes('provider blocked both API and M3U') ||
+          serverMessage.includes('Tip: Try downloading')
         );
 
         if (shouldNotFallbackToClient) {
@@ -112,6 +135,7 @@ export function usePlaylist() {
         } else {
           result = await fetchXtreamPlaylist(source.credentials);
         }
+      }
       }
 
       setCachedPlaylist(cacheKey, result);
