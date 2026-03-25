@@ -7,8 +7,9 @@ import { VideoPlayer } from '@/components/player/VideoPlayer';
 import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
 import { SearchBar } from '@/components/player/SearchBar';
-import { Menu, X, Settings } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Index() {
   useSpatialNavigation();
