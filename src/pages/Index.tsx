@@ -152,22 +152,6 @@ export default function Index() {
       </div>
     );
   }
-  // Auto-load saved playlist on mount
-  const [autoLoaded, setAutoLoaded] = useState(false);
-  useEffect(() => {
-    if (autoLoaded || playlist.channels.length > 0 || playlist.loading) return;
-    const saved = getSavedPlaylists();
-    const aid = getActivePlaylistId();
-    const active = saved.find(p => p.id === aid) || saved[0];
-    if (active) {
-      setAutoLoaded(true);
-      setActivePlaylistId(active.id);
-      playlist.loadPlaylist(active.source);
-    } else {
-      setAutoLoaded(true);
-    }
-  }, [autoLoaded, playlist.channels.length, playlist.loading]);
-
   if (showPlaylistManager || (playlist.channels.length === 0 && !playlist.loading && autoLoaded)) {
     return (
       <PlaylistManager
