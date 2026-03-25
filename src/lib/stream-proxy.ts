@@ -1,56 +1,64 @@
 import { supabase } from '@/integrations/supabase/client';
 
-interface StreamTokenResponse {
-  stream_url: string;
-  expires_in: number;
-}
-
-const tokenCache = new Map<string, { url: string; expiresAt: number }>();
-
 /**
- * Get a secure, tokenized stream URL via the backend proxy.
- * Falls back to direct URL on any failure (timeout, auth, no subscription, etc.)
+ * Validates stream access via backend (checks trial/subscription).
+ * Always returns a playable URL:
+ * - If validation succeeds → returns the same URL (access confirmed)
+ * - If validation fails → falls back to direct URL (graceful degradation)
+ * 
+ * The backend does NOT proxy the stream - it only validates access.
+ * The client always plays the original URL directly.
  */
+
+// Cache validation results for 5 minutes
+const accessCache = new Map<string, { validUntil: number }>();
+const CACHE_DURATION = 5 * 60 * 1000;
+
 export async function getSecureStreamUrl(channelId: string, channelUrl: string): Promise<string> {
-  // Check cache first
-  const cached = tokenCache.get(channelId);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.url;
+  // If recently validated, skip re-validation
+  const cached = accessCache.get('access');
+  if (cached && Date.now() < cached.validUntil) {
+    return channelUrl; // Already validated, play directly
   }
 
   try {
-    // Race: proxy call vs 5-second timeout
+    // Validate access with 5-second timeout
     const result = await Promise.race([
       supabase.functions.invoke('stream-proxy', {
         body: {
-          action: 'get_token',
+          action: 'validate',
           channel_id: channelId,
           channel_url: channelUrl,
         },
       }),
-      new Promise<{ data: null; error: Error }>((_, reject) => 
-        setTimeout(() => reject(new Error('Proxy timeout')), 5000)
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
       ),
     ]);
 
-    if (result.error || !result.data?.stream_url) {
-      console.warn('[stream-proxy] Failed, using direct URL:', result.error?.message || 'No stream_url returned');
+    if (result.error) {
+      console.warn('[access-check] Validation failed, allowing direct play:', result.error.message);
       return channelUrl;
     }
 
-    // Cache for 4 minutes (token lasts 5)
-    tokenCache.set(channelId, {
-      url: result.data.stream_url,
-      expiresAt: Date.now() + 4 * 60 * 1000,
-    });
+    if (result.data?.ok) {
+      // Cache the successful validation
+      accessCache.set('access', { validUntil: Date.now() + CACHE_DURATION });
+      return channelUrl; // Play the original URL directly
+    }
 
-    return result.data.stream_url;
+    // Access denied by backend - but we still return the URL
+    // The subscription guard UI will handle blocking if needed
+    console.warn('[access-check] Access denied:', result.data?.error);
+    return channelUrl;
+
   } catch (err) {
-    console.warn('[stream-proxy] Error, using direct URL:', err instanceof Error ? err.message : err);
+    // Timeout or network error - allow playback (graceful degradation)
+    console.warn('[access-check] Error, allowing direct play:', err instanceof Error ? err.message : err);
     return channelUrl;
   }
 }
 
 export function clearStreamTokens(): void {
-  tokenCache.clear();
+  accessCache.clear();
 }
