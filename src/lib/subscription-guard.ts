@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { activateDevice, type DeviceActivationResult } from './device-manager';
+import { detectAccountSharing } from './account-sharing-detector';
 
 export interface AccessCheck {
   allowed: boolean;
