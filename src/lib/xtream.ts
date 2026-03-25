@@ -168,15 +168,23 @@ export async function fetchXtreamPlaylist(creds: XtreamCredentials): Promise<Par
         workingBase = base;
         break;
       }
-    } catch {
-      // try next
+    } catch (err) {
+      if (err instanceof Error && err.message === 'CLOUDFLARE_BLOCKED') {
+        throw new Error(
+          '⛔ المزود محمي بـ Cloudflare وبيحجب الاتصال من السيرفرات السحابية.\n\n' +
+          '✅ الحلول:\n' +
+          '1. شغّل التطبيق على جهازك بـ npm run dev --host وافتحه بـ HTTP\n' +
+          '2. حمّل ملف M3U من المزود وارفعه من تبويب "File"\n' +
+          '3. على التلفزيون الذكي هيشتغل مباشرة بدون مشاكل'
+        );
+      }
     }
   }
 
   if (!workingBase) {
     throw new Error(
       'فشل الاتصال بالمزود.\n' +
-      'تأكد من صحة بيانات الدخول أو جرب رفع ملف M3U من تبويب "Upload File".'
+      'تأكد من صحة بيانات الدخول أو جرب رفع ملف M3U من تبويب "File".'
     );
   }
 
