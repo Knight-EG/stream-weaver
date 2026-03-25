@@ -16,6 +16,7 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fileName, setFileName] = useState('');
+  const [downloadingM3u, setDownloadingM3u] = useState(false);
 
   const handleSubmit = () => {
     if (mode === 'm3u' && m3uUrl.trim()) {
