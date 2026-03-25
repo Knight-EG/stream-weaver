@@ -1,4 +1,5 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Heart, Play, Tv } from 'lucide-react';
 import type { Channel } from '@/lib/m3u-parser';
 
@@ -53,6 +54,15 @@ const ChannelItem = memo(({ channel, isActive, isFav, onSelect, onToggleFav }: {
 ChannelItem.displayName = 'ChannelItem';
 
 export function ChannelList({ channels, activeId, favorites, onSelect, onToggleFavorite }: ChannelListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: channels.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  });
+
   if (channels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -63,17 +73,37 @@ export function ChannelList({ channels, activeId, favorites, onSelect, onToggleF
   }
 
   return (
-    <div className="space-y-1 overflow-y-auto scrollbar-hide max-h-[calc(100vh-200px)]">
-      {channels.map(ch => (
-        <ChannelItem
-          key={ch.id}
-          channel={ch}
-          isActive={ch.id === activeId}
-          isFav={favorites.has(ch.id)}
-          onSelect={() => onSelect(ch)}
-          onToggleFav={() => onToggleFavorite(ch.id)}
-        />
-      ))}
+    <div
+      ref={parentRef}
+      className="overflow-y-auto scrollbar-hide max-h-[calc(100vh-200px)]"
+      data-focus-group="channel-list"
+    >
+      <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+        {virtualizer.getVirtualItems().map(virtualItem => {
+          const ch = channels[virtualItem.index];
+          return (
+            <div
+              key={ch.id}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              <ChannelItem
+                channel={ch}
+                isActive={ch.id === activeId}
+                isFav={favorites.has(ch.id)}
+                onSelect={() => onSelect(ch)}
+                onToggleFav={() => onToggleFavorite(ch.id)}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
