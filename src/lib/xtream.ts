@@ -79,7 +79,20 @@ function proxyUrl(url: string): string {
 async function directFetch(url: string, timeoutMs = 20000): Promise<any> {
   const finalUrl = proxyUrl(url);
   const res = await fetch(finalUrl, { signal: AbortSignal.timeout(timeoutMs) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    // Check for Cloudflare block from our proxy
+    try {
+      const body = await res.text();
+      if (body.includes('cloudflare_blocked')) {
+        throw new Error('CLOUDFLARE_BLOCKED');
+      }
+      // Try to parse as JSON anyway
+      return JSON.parse(body);
+    } catch (e) {
+      if (e instanceof Error && e.message === 'CLOUDFLARE_BLOCKED') throw e;
+      throw new Error(`HTTP ${res.status}`);
+    }
+  }
   return res.json();
 }
 
