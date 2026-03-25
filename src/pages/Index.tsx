@@ -138,6 +138,11 @@ export default function Index() {
 
   if (playlist.channels.length === 0) return <PlaylistSetup onSubmit={playlist.loadPlaylist} loading={playlist.loading} error={playlist.error} />;
 
+  // TV Mode - Netflix/Shahid style interface
+  if (isTVDevice()) {
+    return <TVLayout channels={playlist.channels} favorites={playlist.favorites} onToggleFavorite={playlist.toggleFavorite} />;
+  }
+
   // Playing a channel/movie/episode fullscreen
   if (activeChannel) {
     return (
