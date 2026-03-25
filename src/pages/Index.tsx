@@ -136,8 +136,23 @@ export default function Index() {
       </div>
     );
   }
+  // Auto-load saved playlist on mount
+  const [autoLoaded, setAutoLoaded] = useState(false);
+  useEffect(() => {
+    if (autoLoaded || playlist.channels.length > 0 || playlist.loading) return;
+    const saved = getSavedPlaylists();
+    const aid = getActivePlaylistId();
+    const active = saved.find(p => p.id === aid) || saved[0];
+    if (active) {
+      setAutoLoaded(true);
+      setActivePlaylistId(active.id);
+      playlist.loadPlaylist(active.source);
+    } else {
+      setAutoLoaded(true);
+    }
+  }, [autoLoaded, playlist.channels.length, playlist.loading]);
 
-  if (playlist.channels.length === 0 || showPlaylistManager) {
+  if (showPlaylistManager || (playlist.channels.length === 0 && !playlist.loading && autoLoaded)) {
     return (
       <PlaylistManager
         onLoadPlaylist={(source) => {
@@ -149,17 +164,6 @@ export default function Index() {
         currentChannelCount={playlist.channels.length}
       />
     );
-  }
-
-  // Auto-load active playlist on mount
-  if (playlist.channels.length === 0) {
-    const saved = getSavedPlaylists();
-    const activeId = getActivePlaylistId();
-    const active = saved.find(p => p.id === activeId) || saved[0];
-    if (active) {
-      playlist.loadPlaylist(active.source);
-      setActivePlaylistId(active.id);
-    }
   }
 
   // TV Mode - Netflix/Shahid style interface
