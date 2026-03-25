@@ -167,21 +167,34 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
                 />
               </div>
-              {server && username && password && (
-                <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 space-y-3">
-                  <p className="text-sm text-foreground font-medium">
-                    💡 الزر ده هيولّد ملف M3U من Xtream API مباشرة باستخدام IP جهازك الحالي.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleDownloadM3u}
-                    disabled={downloadingM3u}
-                    className="w-full py-3 rounded-lg bg-accent text-accent-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60"
-                  >
-                    <Download className="w-5 h-5" /> {downloadingM3u ? 'جاري إنشاء الملف...' : 'تنزيل ملف M3U'}
-                  </button>
-                </div>
-              )}
+              {server && username && password && (() => {
+                const urls = buildM3uDownloadUrls({ server: server.trim(), username: username.trim(), password: password.trim() });
+                return (
+                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-4 space-y-3">
+                    <p className="text-sm text-foreground font-medium">
+                      💡 حمّل ملف M3U من الرابط ده وارفعه في تبويب "Upload File"
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleDownloadM3u}
+                      className="w-full py-3 rounded-lg bg-accent text-accent-foreground font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                    >
+                      <Download className="w-5 h-5" /> تنزيل ملف M3U (بورت 80)
+                    </button>
+                    {urls.length > 1 && (
+                      <details className="text-xs">
+                        <summary className="text-muted-foreground cursor-pointer hover:text-foreground">روابط بديلة</summary>
+                        <div className="mt-2 space-y-1.5">
+                          {urls.slice(1).map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                              className="block text-primary underline break-all text-[11px] hover:no-underline">{url}</a>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
 
