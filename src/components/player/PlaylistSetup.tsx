@@ -156,8 +156,21 @@ export function PlaylistSetup({ onSubmit, loading, error }: PlaylistSetupProps) 
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
                 />
               </div>
-            </>
-          )}
+              {server && username && password && (
+                <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    💡 لو الاتصال المباشر فشل، حمّل ملف M3U من الرابط ده (هيستخدم IP جهازك) وارفعه في تبويب "Upload File":
+                  </p>
+                  <a
+                    href={`${server.trim().replace(/\/$/, '')}/get.php?username=${username.trim()}&password=${password.trim()}&type=m3u_plus&output=ts`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium"
+                  >
+                    <Download className="w-4 h-4" /> حمّل ملف M3U
+                  </a>
+                </div>
+              )}
 
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 space-y-2">
