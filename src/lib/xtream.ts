@@ -71,11 +71,23 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
     isTrial: false, activeCons: 0, maxConnections: 1, createdAt: null,
   };
 
-  const base = buildBase(creds.server);
-  const url = apiUrl(base, creds.username, creds.password);
-
-  // 1) Try browser direct (user's IP — most reliable)
+  // Always use Edge Function first (avoids mixed content & CORS issues)
   try {
+    const data = await edgeFetch({
+      type: 'xtream_account_info',
+      server: creds.server,
+      username: creds.username,
+      password: creds.password,
+    });
+    return data?.account || fallback;
+  } catch (edgeErr) {
+    console.warn('Edge function account info failed:', edgeErr);
+  }
+
+  // Fallback: Try browser direct (only works if both are HTTP or server supports HTTPS)
+  try {
+    const base = buildBase(creds.server);
+    const url = apiUrl(base, creds.username, creds.password);
     const data = await browserFetch(url, 12000);
     const info = data?.user_info || {};
     return {
@@ -89,20 +101,7 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
       message: info.message || undefined,
     };
   } catch (directErr) {
-    console.warn('Direct account info failed:', directErr);
-  }
-
-  // 2) Fallback: Edge Function
-  try {
-    const data = await edgeFetch({
-      type: 'xtream_account_info',
-      server: creds.server,
-      username: creds.username,
-      password: creds.password,
-    });
-    return data?.account || fallback;
-  } catch (err) {
-    console.warn('Edge function account info also failed:', err);
+    console.warn('Direct account info also failed:', directErr);
     return fallback;
   }
 }
@@ -110,13 +109,24 @@ export async function fetchXtreamAccountInfo(creds: XtreamCredentials): Promise<
 // ============ Playlist ============
 
 export async function fetchXtreamPlaylist(creds: XtreamCredentials): Promise<ParsedPlaylist> {
-  const base = buildBase(creds.server);
-
-  // 1) Try browser direct (user's real IP — avoids datacenter IP blocks)
+  // Always use Edge Function first (server-side, no mixed content issues)
   try {
+    const data = await edgeFetch({
+      type: 'xtream',
+      server: creds.server,
+      username: creds.username,
+      password: creds.password,
+    });
+    return data as ParsedPlaylist;
+  } catch (edgeErr) {
+    console.warn('Edge function Xtream fetch failed:', edgeErr);
+  }
+
+  // Fallback: Try browser direct (only works same-protocol)
+  try {
+    const base = buildBase(creds.server);
     const api = (action: string) => apiUrl(base, creds.username, creds.password, action);
 
-    // Fetch live, VOD, and series in parallel
     const [liveCats, liveStreams] = await Promise.all([
       browserFetch(api('get_live_categories')),
       browserFetch(api('get_live_streams'), 20000),
@@ -181,23 +191,9 @@ export async function fetchXtreamPlaylist(creds: XtreamCredentials): Promise<Par
     return { channels, categories };
 
   } catch (directErr) {
-    console.warn('Browser direct Xtream fetch failed:', directErr);
-  }
-
-  // 2) Fallback: Edge Function
-  try {
-    const data = await edgeFetch({
-      type: 'xtream',
-      server: creds.server,
-      username: creds.username,
-      password: creds.password,
-    });
-    return data as ParsedPlaylist;
-  } catch (edgeErr) {
     throw new Error(
       `فشل الاتصال بالمزود.\n\n` +
-      `السبب المحتمل: التطبيق يعمل على HTTPS والمزود على HTTP (محتوى مختلط).\n\n` +
-      `الحل: حمّل ملف M3U من الزر أدناه وارفعه في تبويب "File".`
+      `جرب تحميل ملف M3U من الزر أدناه وارفعه في تبويب "File".`
     );
   }
 }
