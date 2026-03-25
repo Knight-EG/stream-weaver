@@ -54,7 +54,10 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-0 sm:items-start sm:justify-end sm:inset-auto sm:absolute sm:right-0 sm:top-full sm:mt-2">
+          {/* Backdrop on mobile */}
+          <div className="fixed inset-0 bg-background/50 sm:hidden" onClick={() => setOpen(false)} />
+          <div className="relative w-[90vw] sm:w-80 max-h-[70vh] sm:max-h-96 bg-card border border-border rounded-xl shadow-xl overflow-hidden flex flex-col z-10">
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-border">
             <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
