@@ -9,7 +9,7 @@ import { ChannelList } from '@/components/player/ChannelList';
 import { CategorySidebar } from '@/components/player/CategorySidebar';
 import { SearchBar } from '@/components/player/SearchBar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { Menu, X, Settings, LogOut, User, AlertTriangle, Loader2, Clock, ShieldCheck, Infinity } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User, AlertTriangle, Loader2, Clock, ShieldCheck, Infinity, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
