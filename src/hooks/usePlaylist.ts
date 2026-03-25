@@ -86,20 +86,22 @@ export function usePlaylist() {
         const { parseM3U } = await import('@/lib/m3u-parser');
         result = parseM3U(source.content);
       } else if (source.type === 'xtream') {
+        // Xtream: always direct from user's browser, no server proxy
         const { fetchXtreamPlaylist } = await import('@/lib/xtream');
         result = await fetchXtreamPlaylist(source.credentials);
       } else {
+        // M3U URL: try client-side first, fallback to server
         try {
+          const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
+          result = await fetchAndParseM3U(source.url);
+        } catch (clientErr) {
+          console.warn('Client M3U failed, trying server:', clientErr);
           const { data, error } = await supabase.functions.invoke('parse-playlist', {
             body: { type: 'm3u', url: source.url },
           });
           if (error) throw error;
           if (data?.ok === false) throw new Error(data.error || 'Failed');
           result = data as ParsedPlaylist;
-        } catch (serverErr) {
-          console.warn('Server M3U failed, trying client:', serverErr);
-          const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
-          result = await fetchAndParseM3U(source.url);
         }
       }
 
