@@ -44,20 +44,32 @@ export default function Index() {
 
   // Access denied
   if (access && !access.allowed) {
+    const isBanned = access.tempBan?.active;
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-background">
         <div className="max-w-md w-full text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-warning/20 flex items-center justify-center mx-auto"><ShieldCheck className="w-10 h-10 text-warning" /></div>
-          <h1 className="text-2xl font-bold text-foreground">{t('accessActivationRequired')}</h1>
-          <p className="text-muted-foreground">{access.reason}</p>
-          <div className="bg-card border border-border rounded-xl p-6 text-start space-y-3">
-            <h3 className="text-foreground font-semibold flex items-center gap-2"><Clock className="w-4 h-4 text-muted-foreground" /> Trial Status</h3>
-            <div className="flex items-center justify-between"><span className="text-muted-foreground text-sm">Trial Period</span><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">{t('accessTrialExpired')}</span></div>
-            <div className="flex items-center justify-between"><span className="text-muted-foreground text-sm">{t('settingsSubscription')}</span><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">Not Active</span></div>
+          <div className={`w-20 h-20 rounded-full ${isBanned ? 'bg-destructive/20' : 'bg-warning/20'} flex items-center justify-center mx-auto`}>
+            <ShieldCheck className={`w-10 h-10 ${isBanned ? 'text-destructive' : 'text-warning'}`} />
           </div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {isBanned ? t('accessAccountSuspended') : t('accessActivationRequired')}
+          </h1>
+          <p className="text-muted-foreground">{access.reason}</p>
+          {isBanned && access.tempBan?.expiresAt && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-sm text-destructive">
+              ⏱️ {t('accessBanExpires')}: {new Date(access.tempBan.expiresAt).toLocaleString()}
+            </div>
+          )}
+          {!isBanned && (
+            <div className="bg-card border border-border rounded-xl p-6 text-start space-y-3">
+              <h3 className="text-foreground font-semibold flex items-center gap-2"><Clock className="w-4 h-4 text-muted-foreground" /> Trial Status</h3>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground text-sm">Trial Period</span><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">{t('accessTrialExpired')}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground text-sm">{t('settingsSubscription')}</span><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">Not Active</span></div>
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">{t('accessActivateMessage')}</p>
           <div className="flex flex-col gap-3">
-            <Link to="/pricing" className="px-6 py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable text-center flex items-center justify-center gap-2" data-focusable="true"><CreditCard className="w-4 h-4" /> {t('accessSubscribeNow')}</Link>
+            {!isBanned && <Link to="/pricing" className="px-6 py-3 rounded-lg gradient-primary text-primary-foreground font-semibold tv-focusable text-center flex items-center justify-center gap-2" data-focusable="true"><CreditCard className="w-4 h-4" /> {t('accessSubscribeNow')}</Link>}
             <button onClick={refreshAccess} className="px-6 py-3 rounded-lg bg-secondary text-secondary-foreground font-semibold tv-focusable flex items-center justify-center gap-2" data-focusable="true"><ShieldCheck className="w-4 h-4" /> {t('accessCheckActivation')}</button>
             <Link to="/settings" className="px-6 py-3 rounded-lg bg-secondary text-secondary-foreground font-semibold tv-focusable text-center" data-focusable="true">{t('accessManageDevices')}</Link>
             <button onClick={signOut} className="px-6 py-3 rounded-lg text-destructive hover:bg-destructive/10 font-semibold tv-focusable" data-focusable="true">{t('signOut')}</button>

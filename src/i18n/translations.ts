@@ -70,6 +70,8 @@ type TranslationKeys = {
   accessManageDevices: string;
   accessTrialRemaining: string;
   accessActivateMessage: string;
+  accessAccountSuspended: string;
+  accessBanExpires: string;
   
   // Settings
   settingsTitle: string;
@@ -242,6 +244,8 @@ const en: TranslationKeys = {
   accessManageDevices: 'Manage Devices',
   accessTrialRemaining: 'day(s) remaining',
   accessActivateMessage: 'Contact your provider to activate your subscription. Once activated, the app will work immediately.',
+  accessAccountSuspended: 'Account Temporarily Suspended',
+  accessBanExpires: 'Access will be restored at',
   
   settingsTitle: 'Settings',
   settingsProfile: 'Profile',
@@ -405,6 +409,8 @@ const ar: TranslationKeys = {
   accessManageDevices: 'إدارة الأجهزة',
   accessTrialRemaining: 'يوم متبقي',
   accessActivateMessage: 'تواصل مع المزود لتفعيل اشتراكك. بمجرد التفعيل، سيعمل التطبيق فوراً.',
+  accessAccountSuspended: 'الحساب موقوف مؤقتاً',
+  accessBanExpires: 'سيتم استعادة الوصول في',
   
   settingsTitle: 'الإعدادات',
   settingsProfile: 'الملف الشخصي',
@@ -568,6 +574,8 @@ const tr: TranslationKeys = {
   accessManageDevices: 'Cihazları Yönet',
   accessTrialRemaining: 'gün kaldı',
   accessActivateMessage: 'Aboneliğinizi etkinleştirmek için sağlayıcınızla iletişime geçin.',
+  accessAccountSuspended: 'Hesap Geçici Olarak Askıya Alındı',
+  accessBanExpires: 'Erişim şu tarihte yeniden sağlanacak',
   
   settingsTitle: 'Ayarlar',
   settingsProfile: 'Profil',
