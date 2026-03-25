@@ -171,6 +171,17 @@ type TranslationKeys = {
   couponActive: string;
   couponExpired: string;
   
+  // Movies & Series
+  moviesTitle: string;
+  moviesSearchPlaceholder: string;
+  moviesEmpty: string;
+  seriesTitle: string;
+  seriesSearchPlaceholder: string;
+  seriesEmpty: string;
+  allCategories: string;
+  sortByName: string;
+  sortByCategory: string;
+  
   // Time
   timeJustNow: string;
   timeMinAgo: string;
@@ -325,6 +336,16 @@ const en: TranslationKeys = {
   couponActive: 'Active',
   couponExpired: 'Expired',
   
+  moviesTitle: 'Movies',
+  moviesSearchPlaceholder: 'Search movies...',
+  moviesEmpty: 'No movies found',
+  seriesTitle: 'Series',
+  seriesSearchPlaceholder: 'Search series...',
+  seriesEmpty: 'No series found',
+  allCategories: 'All',
+  sortByName: 'Sort by Name',
+  sortByCategory: 'Sort by Category',
+  
   timeJustNow: 'Just now',
   timeMinAgo: 'min ago',
   timeHoursAgo: 'h ago',
@@ -478,6 +499,16 @@ const ar: TranslationKeys = {
   couponActive: 'نشط',
   couponExpired: 'منتهي',
   
+  moviesTitle: 'الأفلام',
+  moviesSearchPlaceholder: 'ابحث عن الأفلام...',
+  moviesEmpty: 'لا توجد أفلام',
+  seriesTitle: 'المسلسلات',
+  seriesSearchPlaceholder: 'ابحث عن المسلسلات...',
+  seriesEmpty: 'لا توجد مسلسلات',
+  allCategories: 'الكل',
+  sortByName: 'ترتيب بالاسم',
+  sortByCategory: 'ترتيب بالتصنيف',
+  
   timeJustNow: 'الآن',
   timeMinAgo: 'دقيقة مضت',
   timeHoursAgo: 'ساعة مضت',
@@ -630,6 +661,16 @@ const tr: TranslationKeys = {
   couponExpiry: 'Son Kullanma',
   couponActive: 'Aktif',
   couponExpired: 'Süresi Dolmuş',
+  
+  moviesTitle: 'Filmler',
+  moviesSearchPlaceholder: 'Film ara...',
+  moviesEmpty: 'Film bulunamadı',
+  seriesTitle: 'Diziler',
+  seriesSearchPlaceholder: 'Dizi ara...',
+  seriesEmpty: 'Dizi bulunamadı',
+  allCategories: 'Tümü',
+  sortByName: 'İsme Göre',
+  sortByCategory: 'Kategoriye Göre',
   
   timeJustNow: 'Az önce',
   timeMinAgo: 'dk önce',
