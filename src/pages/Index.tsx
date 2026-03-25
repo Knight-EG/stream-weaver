@@ -167,6 +167,11 @@ export default function Index() {
           setActiveChannel(null);
           playlist.loadPlaylist(source);
           setShowPlaylistManager(false);
+          if (source.type === 'xtream') {
+            fetchXtreamAccountInfo(source.credentials).then(setXtreamAccount);
+          } else {
+            setXtreamAccount(null);
+          }
         }}
         loading={playlist.loading}
         error={playlist.error}
