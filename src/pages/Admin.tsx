@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette, Infinity, Clock } from 'lucide-react';
+import { ArrowLeft, Users, Monitor, CreditCard, Shield, Plus, Trash2, Check, X, Search, BarChart3, Power, RefreshCw, Palette, Infinity, Clock, Key, Bell, DollarSign, Ban } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { WhiteLabelSettings } from '@/components/admin/WhiteLabelSettings';
 import { TrialSettings } from '@/components/admin/TrialSettings';
+import { ApiKeysSettings } from '@/components/admin/ApiKeysSettings';
+import { PaymentAnalytics } from '@/components/admin/PaymentAnalytics';
+import { AdminNotifications } from '@/components/admin/AdminNotifications';
 
-type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics' | 'branding' | 'trial';
+type Tab = 'users' | 'devices' | 'subscriptions' | 'analytics' | 'payments' | 'branding' | 'trial' | 'keys' | 'notify';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('users');
@@ -34,7 +37,6 @@ export default function Admin() {
     setDevices(devicesRes.data || []);
     setSubscriptions(subsRes.data || []);
 
-    // Compute analytics
     const sessions = sessionsRes.data || [];
     const channelCounts: Record<string, number> = {};
     sessions.forEach((s: any) => {
@@ -60,6 +62,21 @@ export default function Admin() {
 
   async function deleteDevice(deviceId: string) {
     await supabase.from('devices').update({ is_active: false }).eq('id', deviceId);
+    loadData();
+  }
+
+  async function suspendSubscription(subId: string) {
+    await supabase.from('subscriptions').update({ status: 'suspended' } as any).eq('id', subId);
+    loadData();
+  }
+
+  async function expireSubscription(subId: string) {
+    await supabase.from('subscriptions').update({ status: 'expired' } as any).eq('id', subId);
+    loadData();
+  }
+
+  async function reactivateSubscription(subId: string) {
+    await supabase.from('subscriptions').update({ status: 'active' } as any).eq('id', subId);
     loadData();
   }
 
@@ -92,8 +109,11 @@ export default function Admin() {
     { id: 'devices', label: 'Devices', icon: <Monitor className="w-4 h-4" /> },
     { id: 'subscriptions', label: 'Subs', icon: <CreditCard className="w-4 h-4" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'payments', label: 'Payments', icon: <DollarSign className="w-4 h-4" /> },
+    { id: 'notify', label: 'Notify', icon: <Bell className="w-4 h-4" /> },
     { id: 'branding', label: 'Brand', icon: <Palette className="w-4 h-4" /> },
-    { id: 'trial', label: 'Trial', icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'trial', label: 'Trial', icon: <Clock className="w-4 h-4" /> },
+    { id: 'keys', label: 'API Keys', icon: <Key className="w-4 h-4" /> },
   ];
 
   return (
@@ -135,18 +155,18 @@ export default function Admin() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md text-sm font-medium transition-colors tv-focusable whitespace-nowrap px-3 ${
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-md text-sm font-medium transition-colors tv-focusable whitespace-nowrap px-3 ${
               tab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
             data-focusable="true"
           >
-            {t.icon} {t.label}
+            {t.icon} <span className="hidden sm:inline">{t.label}</span>
           </button>
         ))}
       </div>
 
       {/* Search */}
-      {tab !== 'analytics' && (
+      {['users', 'devices', 'subscriptions'].includes(tab) && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -220,19 +240,10 @@ export default function Admin() {
                   </td>
                   <td className="p-3 text-muted-foreground hidden sm:table-cell">{new Date(d.last_seen_at).toLocaleDateString()}</td>
                   <td className="p-3 flex gap-1">
-                    <button
-                      onClick={() => toggleDevice(d.id, d.is_active)}
-                      className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded"
-                      data-focusable="true"
-                      title={d.is_active ? 'Deactivate' : 'Activate'}
-                    >
+                    <button onClick={() => toggleDevice(d.id, d.is_active)} className="p-1.5 text-muted-foreground hover:text-foreground tv-focusable rounded" data-focusable="true" title={d.is_active ? 'Deactivate' : 'Activate'}>
                       <Power className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => deleteDevice(d.id)}
-                      className="p-1.5 text-muted-foreground hover:text-destructive tv-focusable rounded"
-                      data-focusable="true"
-                    >
+                    <button onClick={() => deleteDevice(d.id)} className="p-1.5 text-muted-foreground hover:text-destructive tv-focusable rounded" data-focusable="true">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -257,41 +268,24 @@ export default function Admin() {
             <Plus className="w-4 h-4" /> Grant Subscription
           </button>
 
-          {/* Grant Modal */}
           {showGrantModal && (
             <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               <h3 className="text-foreground font-semibold">Grant Subscription</h3>
               <div className="space-y-3">
                 <div>
                   <label className="text-xs text-muted-foreground font-medium">User</label>
-                  <select
-                    value={grantUserId}
-                    onChange={e => setGrantUserId(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
+                  <select value={grantUserId} onChange={e => setGrantUserId(e.target.value)} className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                     <option value="">Select user...</option>
-                    {profiles.map((p: any) => (
-                      <option key={p.user_id} value={p.user_id}>{p.display_name || p.email}</option>
-                    ))}
+                    {profiles.map((p: any) => (<option key={p.user_id} value={p.user_id}>{p.display_name || p.email}</option>))}
                   </select>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground font-medium">Plan Type</label>
                   <div className="flex gap-2 mt-1">
-                    <button
-                      onClick={() => setGrantPlanType('standard')}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${
-                        grantPlanType === 'standard' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
+                    <button onClick={() => setGrantPlanType('standard')} className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${grantPlanType === 'standard' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                       <Clock className="w-3.5 h-3.5" /> Standard
                     </button>
-                    <button
-                      onClick={() => setGrantPlanType('lifetime')}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${
-                        grantPlanType === 'lifetime' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
+                    <button onClick={() => setGrantPlanType('lifetime')} className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${grantPlanType === 'lifetime' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                       <Infinity className="w-3.5 h-3.5" /> Lifetime
                     </button>
                   </div>
@@ -299,34 +293,17 @@ export default function Admin() {
                 {grantPlanType === 'standard' && (
                   <div>
                     <label className="text-xs text-muted-foreground font-medium">Duration (days)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={grantDays}
-                      onChange={e => setGrantDays(Number(e.target.value))}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
+                    <input type="number" min={1} value={grantDays} onChange={e => setGrantDays(Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                   </div>
                 )}
                 <div>
                   <label className="text-xs text-muted-foreground font-medium">Max Devices</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={grantMaxDevices}
-                    onChange={e => setGrantMaxDevices(Number(e.target.value))}
-                    className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  <input type="number" min={1} max={10} value={grantMaxDevices} onChange={e => setGrantMaxDevices(Number(e.target.value))} className="w-full mt-1 px-3 py-2 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={grantSubscription} className="flex-1 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm tv-focusable" data-focusable="true">
-                  Grant
-                </button>
-                <button onClick={() => setShowGrantModal(false)} className="px-4 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm tv-focusable" data-focusable="true">
-                  Cancel
-                </button>
+                <button onClick={grantSubscription} className="flex-1 py-2.5 rounded-lg gradient-primary text-primary-foreground font-semibold text-sm tv-focusable" data-focusable="true">Grant</button>
+                <button onClick={() => setShowGrantModal(false)} className="px-4 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm tv-focusable" data-focusable="true">Cancel</button>
               </div>
             </div>
           )}
@@ -337,6 +314,7 @@ export default function Admin() {
               const profile = profiles.find((p: any) => p.user_id === s.user_id);
               const isLifetime = (s as any).plan_type === 'lifetime';
               const isExpired = !isLifetime && new Date(s.expires_at) < new Date();
+              const isActive = s.status === 'active' && !isExpired;
               return (
                 <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -355,14 +333,34 @@ export default function Admin() {
                           </span>
                         )}
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                          !isExpired && s.status === 'active' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'
+                          isActive ? 'bg-success/20 text-success'
+                            : s.status === 'suspended' ? 'bg-warning/20 text-warning'
+                              : 'bg-destructive/20 text-destructive'
                         }`}>
-                          {!isExpired && s.status === 'active' ? 'Active' : 'Expired'}
+                          {isActive ? 'Active' : s.status === 'suspended' ? 'Suspended' : 'Expired'}
                         </span>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Max {s.max_devices} devices</p>
+                    {/* Sub management actions */}
+                    <div className="flex gap-1">
+                      {isActive && (
+                        <>
+                          <button onClick={() => suspendSubscription(s.id)} className="p-1.5 text-muted-foreground hover:text-warning tv-focusable rounded" data-focusable="true" title="Suspend">
+                            <Ban className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => expireSubscription(s.id)} className="p-1.5 text-muted-foreground hover:text-destructive tv-focusable rounded" data-focusable="true" title="Expire">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      {!isActive && (
+                        <button onClick={() => reactivateSubscription(s.id)} className="p-1.5 text-muted-foreground hover:text-success tv-focusable rounded" data-focusable="true" title="Reactivate">
+                          <Check className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">Max {s.max_devices} devices</p>
                 </div>
               );
             })}
@@ -390,10 +388,7 @@ export default function Admin() {
                         <span className="text-muted-foreground text-xs">{ch.views} views</span>
                       </div>
                       <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full gradient-primary rounded-full transition-all"
-                          style={{ width: `${(ch.views / analytics.topChannels[0].views) * 100}%` }}
-                        />
+                        <div className="h-full gradient-primary rounded-full transition-all" style={{ width: `${(ch.views / analytics.topChannels[0].views) * 100}%` }} />
                       </div>
                     </div>
                   </div>
@@ -406,11 +401,20 @@ export default function Admin() {
         </div>
       )}
 
+      {/* Payments Tab */}
+      {tab === 'payments' && <PaymentAnalytics />}
+
+      {/* Notify Tab */}
+      {tab === 'notify' && <AdminNotifications profiles={profiles} />}
+
       {/* Branding Tab */}
       {tab === 'branding' && <WhiteLabelSettings />}
 
       {/* Trial Tab */}
       {tab === 'trial' && <TrialSettings />}
+
+      {/* API Keys Tab */}
+      {tab === 'keys' && <ApiKeysSettings />}
     </div>
   );
 }

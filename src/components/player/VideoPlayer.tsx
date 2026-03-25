@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle, Lock } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Loader2, AlertTriangle, Lock, RotateCcw } from 'lucide-react';
 import { startSession, endSession } from '@/lib/analytics';
 import { fetchEPGForChannel, getCurrentProgram, getProgramProgress, type EPGProgram } from '@/lib/epg';
 import { getSecureStreamUrl } from '@/lib/stream-proxy';
+import { saveResumePosition, getResumePosition } from '@/lib/resume-playback';
 
 interface VideoPlayerProps {
   url: string;
@@ -32,8 +33,11 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
   const [currentEPG, setCurrentEPG] = useState<EPGProgram | null>(null);
   const [epgProgress, setEpgProgress] = useState(0);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [resumePosition, setResumePosition] = useState<number | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
   const hideTimer = useRef<number>(0);
   const retryTimer = useRef<number>(0);
+  const saveInterval = useRef<number>(0);
 
   const allUrls = [url, ...fallbackUrls];
   const activeUrl = allUrls[currentUrlIndex] || url;
@@ -61,18 +65,28 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
     }, delay);
   }, [currentUrlIndex, allUrls.length]);
 
-  // Resolve secure stream URL
+  // Check resume position & resolve secure stream URL
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setResolvedUrl(null);
+    setShowResumePrompt(false);
 
     const id = channelId || `ch-${activeUrl}`;
+    
+    // Check resume position
+    getResumePosition(id).then(pos => {
+      if (!cancelled && pos && pos > 5) {
+        setResumePosition(pos);
+        setShowResumePrompt(true);
+      }
+    });
+
     getSecureStreamUrl(id, activeUrl).then(secureUrl => {
       if (!cancelled) setResolvedUrl(secureUrl);
     }).catch(() => {
-      if (!cancelled) setResolvedUrl(activeUrl); // fallback to direct
+      if (!cancelled) setResolvedUrl(activeUrl);
     });
 
     return () => { cancelled = true; };
@@ -134,9 +148,24 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
       video.addEventListener('error', () => retryWithBackoff(retryCount), { once: true });
     }
 
+    // Save resume position periodically
+    const chId = channelId || `ch-${activeUrl}`;
+    saveInterval.current = window.setInterval(() => {
+      const v = videoRef.current;
+      if (v && v.currentTime > 5 && !v.paused) {
+        saveResumePosition(chId, title || '', activeUrl, v.currentTime, v.duration || undefined);
+      }
+    }, 15000);
+
     return () => {
+      // Save final position on unmount
+      const v = videoRef.current;
+      if (v && v.currentTime > 5) {
+        saveResumePosition(chId, title || '', activeUrl, v.currentTime, v.duration || undefined);
+      }
       hlsRef.current?.destroy();
       clearTimeout(retryTimer.current);
+      clearInterval(saveInterval.current);
       endSession();
     };
   }, [resolvedUrl, retryCount]);
@@ -209,6 +238,32 @@ export function VideoPlayer({ url, title, channelId, fallbackUrls = [], onBack, 
             data-focusable="true"
           >
             Retry
+          </button>
+        </div>
+      )}
+
+      {/* Resume Prompt */}
+      {showResumePrompt && resumePosition && !loading && !error && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur border border-border rounded-xl p-4 flex items-center gap-3 shadow-lg z-20">
+          <RotateCcw className="w-5 h-5 text-primary flex-shrink-0" />
+          <div className="text-sm">
+            <p className="text-foreground font-medium">Resume from {Math.floor(resumePosition / 60)}:{String(Math.floor(resumePosition % 60)).padStart(2, '0')}?</p>
+          </div>
+          <button
+            onClick={() => {
+              const v = videoRef.current;
+              if (v) v.currentTime = resumePosition;
+              setShowResumePrompt(false);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold"
+          >
+            Resume
+          </button>
+          <button
+            onClick={() => setShowResumePrompt(false)}
+            className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs"
+          >
+            Start Over
           </button>
         </div>
       )}

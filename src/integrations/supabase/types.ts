@@ -113,6 +113,30 @@ export type Database = {
         }
         Relationships: []
       }
+      favorites: {
+        Row: {
+          channel_id: string
+          channel_name: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          channel_name?: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          channel_name?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -186,6 +210,39 @@ export type Database = {
           provider_order_id?: string | null
           provider_payment_id?: string | null
           status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      playback_resume: {
+        Row: {
+          channel_id: string
+          channel_name: string
+          channel_url: string | null
+          duration_seconds: number | null
+          id: string
+          position_seconds: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          channel_name?: string
+          channel_url?: string | null
+          duration_seconds?: number | null
+          id?: string
+          position_seconds?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          channel_name?: string
+          channel_url?: string | null
+          duration_seconds?: number | null
+          id?: string
+          position_seconds?: number
           updated_at?: string
           user_id?: string
         }

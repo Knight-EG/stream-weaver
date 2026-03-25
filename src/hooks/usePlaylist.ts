@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { type Channel, type ParsedPlaylist } from '@/lib/m3u-parser';
 import { type XtreamCredentials } from '@/lib/xtream';
 import { getCachedPlaylist, setCachedPlaylist, buildCategoryIndex } from '@/lib/playlist-cache';
@@ -21,15 +21,11 @@ interface PlaylistState {
 
 const FAVORITES_KEY = 'iptv_favorites';
 
-function loadFavorites(): Set<string> {
+function loadLocalFavorites(): Set<string> {
   try {
     const stored = localStorage.getItem(FAVORITES_KEY);
     return stored ? new Set(JSON.parse(stored)) : new Set();
   } catch { return new Set(); }
-}
-
-function saveFavorites(favs: Set<string>) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs]));
 }
 
 export function usePlaylist() {
@@ -40,16 +36,32 @@ export function usePlaylist() {
     error: null,
     selectedCategory: null,
     searchQuery: '',
-    favorites: loadFavorites(),
+    favorites: loadLocalFavorites(),
     categoryIndex: new Map(),
   });
+
+  // Load favorites from DB on mount
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('favorites')
+        .select('channel_id')
+        .eq('user_id', user.id);
+      if (data && data.length > 0) {
+        const dbFavs = new Set(data.map((f: any) => f.channel_id));
+        setState(s => ({ ...s, favorites: dbFavs }));
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify([...dbFavs]));
+      }
+    })();
+  }, []);
 
   const loadPlaylist = useCallback(async (source: PlaylistSource) => {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
       const cacheKey = source.type === 'm3u' ? source.url : `${source.credentials.server}:${source.credentials.username}`;
       
-      // Check local cache first
       const cached = getCachedPlaylist(cacheKey);
       if (cached) {
         const categoryIndex = buildCategoryIndex(cached.channels);
@@ -64,7 +76,6 @@ export function usePlaylist() {
         return;
       }
 
-      // Try server-side parsing via edge function
       let result: ParsedPlaylist;
       try {
         const body = source.type === 'm3u'
@@ -72,11 +83,9 @@ export function usePlaylist() {
           : { type: 'xtream', server: source.credentials.server, username: source.credentials.username, password: source.credentials.password };
 
         const { data, error } = await supabase.functions.invoke('parse-playlist', { body });
-
         if (error) throw error;
         result = data as ParsedPlaylist;
       } catch (serverErr) {
-        // Fallback to client-side parsing
         console.warn('Server-side parsing failed, falling back to client:', serverErr);
         const { fetchAndParseM3U } = await import('@/lib/m3u-parser');
         const { fetchXtreamPlaylist } = await import('@/lib/xtream');
@@ -88,9 +97,7 @@ export function usePlaylist() {
         }
       }
 
-      // Cache locally
       setCachedPlaylist(cacheKey, result);
-
       const categoryIndex = buildCategoryIndex(result.channels);
       setState(s => ({
         ...s,
@@ -117,12 +124,31 @@ export function usePlaylist() {
     setState(s => ({ ...s, searchQuery: q }));
   }, []);
 
-  const toggleFavorite = useCallback((channelId: string) => {
+  const toggleFavorite = useCallback((channelId: string, channelName?: string) => {
     setState(s => {
       const newFavs = new Set(s.favorites);
-      if (newFavs.has(channelId)) newFavs.delete(channelId);
-      else newFavs.add(channelId);
-      saveFavorites(newFavs);
+      const adding = !newFavs.has(channelId);
+      if (adding) newFavs.add(channelId);
+      else newFavs.delete(channelId);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify([...newFavs]));
+
+      // Persist to DB async
+      (async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        if (adding) {
+          await supabase.from('favorites').upsert({
+            user_id: user.id,
+            channel_id: channelId,
+            channel_name: channelName || '',
+          } as any, { onConflict: 'user_id,channel_id' });
+        } else {
+          await supabase.from('favorites').delete()
+            .eq('user_id', user.id)
+            .eq('channel_id', channelId);
+        }
+      })();
+
       return { ...s, favorites: newFavs };
     });
   }, []);
