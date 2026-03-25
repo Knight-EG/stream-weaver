@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
           channels.push({
             id: `vod-${s.stream_id}`,
             name: s.name || `Movie ${s.stream_id}`,
-            url: `${base}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
+            url: `${workingBase}/movie/${username}/${password}/${s.stream_id}.${s.container_extension || 'mp4'}`,
             logo: s.stream_icon || undefined,
             group: catMap.get(String(s.category_id)) || 'Movies',
             type: 'movie',
