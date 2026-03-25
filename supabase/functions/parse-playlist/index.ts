@@ -24,7 +24,9 @@ function jsonResponse(payload: unknown, status = 200) {
 
 function buildBase(server: string): string {
   let base = server.replace(/\/$/, '');
-  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
+  // Force HTTP always — IPTV providers work on HTTP only
+  base = base.replace(/^https:\/\//i, 'http://');
+  if (!/^http:\/\//i.test(base)) base = 'http://' + base;
   return base;
 }
 
