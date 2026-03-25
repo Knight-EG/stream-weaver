@@ -16,17 +16,29 @@ export interface AccessCheck {
     id: string;
     isActive: boolean;
   };
+  tempBan?: {
+    active: boolean;
+    expiresAt?: string;
+  };
 }
 
 /**
- * Full access check: auth + trial/subscription + device activation.
- * Trial users get access without a subscription for the trial period.
- * After trial expires, a subscription is required.
+ * Full access check: auth + trial/subscription + device activation + anti-sharing.
  */
 export async function checkAccess(): Promise<AccessCheck> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { allowed: false, reason: 'Not authenticated' };
+  }
+
+  // Account sharing / temp ban check FIRST (before everything else)
+  const sharingCheck = await detectAccountSharing();
+  if (sharingCheck.suspicious && (sharingCheck.action === 'block' || sharingCheck.action === 'temp_ban')) {
+    return {
+      allowed: false,
+      reason: sharingCheck.reason || 'Account sharing detected.',
+      tempBan: sharingCheck.action === 'temp_ban' ? { active: true, expiresAt: sharingCheck.banExpiresAt } : undefined,
+    };
   }
 
   // Get profile for trial info
@@ -41,7 +53,7 @@ export async function checkAccess(): Promise<AccessCheck> {
   const trialActive = trialEndsAt ? now < trialEndsAt : false;
   const trialDaysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
-  // Check subscription — lifetime subs have far-future expiry
+  // Check subscription
   const { data: sub } = await supabase
     .from('subscriptions')
     .select('status, expires_at, plan_type')
@@ -54,7 +66,6 @@ export async function checkAccess(): Promise<AccessCheck> {
 
   const hasActiveSubscription = !!sub;
 
-  // If no trial AND no subscription → block
   if (!trialActive && !hasActiveSubscription) {
     return {
       allowed: false,
@@ -72,27 +83,20 @@ export async function checkAccess(): Promise<AccessCheck> {
       reason: deviceResult.error || 'Device activation failed',
       trialActive,
       trialDaysLeft,
-      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
+      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: sub.plan_type } : undefined,
     };
   }
 
-  // Account sharing detection
-  const sharingCheck = await detectAccountSharing();
-  if (sharingCheck.suspicious && sharingCheck.action === 'block') {
-    return {
-      allowed: false,
-      reason: sharingCheck.reason || 'Account sharing detected. Only 1 device allowed per account.',
-      trialActive,
-      trialDaysLeft,
-      subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
-    };
+  // Warn-level sharing (allow but user was notified)
+  if (sharingCheck.suspicious && sharingCheck.action === 'warn') {
+    // Access allowed but warning was sent via notification
   }
 
   return {
     allowed: true,
     trialActive: trialActive && !hasActiveSubscription,
     trialDaysLeft,
-    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: (sub as any).plan_type } : undefined,
+    subscription: sub ? { status: sub.status, expiresAt: sub.expires_at, planType: sub.plan_type } : undefined,
     device: {
       id: deviceResult.device!.id,
       isActive: deviceResult.device!.is_active,
