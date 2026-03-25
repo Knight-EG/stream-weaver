@@ -30,25 +30,92 @@ function buildBase(server: string): string {
   return base;
 }
 
-async function xtreamFetch(url: string): Promise<any> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+// Extract hostname without port
+function extractHostname(server: string): string {
+  const base = buildBase(server);
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'IPTVSmartersPro',
-        'Accept': '*/*',
-        'Connection': 'keep-alive',
-      },
-      redirect: 'follow',
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    clearTimeout(timeout);
-    throw err;
+    return new URL(base).hostname;
+  } catch {
+    return server.replace(/^https?:\/\//i, '').split(':')[0].split('/')[0];
+  }
+}
+
+// Build alternative base URLs with different ports
+function getAlternativeBases(server: string): string[] {
+  const hostname = extractHostname(server);
+  const mainBase = buildBase(server);
+  const bases = [mainBase];
+  
+  // Add port 80 (most common for Xtream streaming)
+  const port80 = `http://${hostname}`;
+  if (!bases.includes(port80)) bases.push(port80);
+  
+  // Add port 25461 (common alternative)
+  const port25461 = `http://${hostname}:25461`;
+  if (!bases.includes(port25461)) bases.push(port25461);
+  
+  return bases;
+}
+
+const USER_AGENTS = [
+  'IPTVSmartersPro',
+  'IPTVSmarters/1.0',
+  'VLC/3.0.20 LibVLC/3.0.20',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Lavf/60.3.100',
+];
+
+async function xtreamFetch(url: string, retryWithUAs = true): Promise<any> {
+  let lastError: Error | null = null;
+  
+  const agents = retryWithUAs ? USER_AGENTS : [USER_AGENTS[0]];
+  
+  for (const ua of agents) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': '*/*',
+        },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        lastError = new Error(`HTTP ${res.status}`);
+        console.warn(`xtreamFetch failed with UA="${ua}": HTTP ${res.status}`);
+        continue; // Try next UA
+      }
+      return await res.json();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`xtreamFetch error with UA="${ua}":`, lastError.message);
+    }
+  }
+  
+  throw lastError || new Error('All fetch attempts failed');
+}
+
+// Try fetching from multiple base URLs (different ports)
+async function xtreamFetchWithPortFallback(path: string, server: string): Promise<any> {
+  const bases = getAlternativeBases(server);
+  let lastError: Error | null = null;
+  
+  for (const base of bases) {
+    try {
+      console.log(`Trying: ${base}${path}`);
+      const result = await xtreamFetch(`${base}${path}`);
+      return result;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Failed on ${base}: ${lastError.message}`);
+    }
+  }
+  
+  throw lastError || new Error('All port attempts failed');
+}
   }
 }
 
