@@ -244,6 +244,8 @@ const en: TranslationKeys = {
   accessManageDevices: 'Manage Devices',
   accessTrialRemaining: 'day(s) remaining',
   accessActivateMessage: 'Contact your provider to activate your subscription. Once activated, the app will work immediately.',
+  accessAccountSuspended: 'Account Temporarily Suspended',
+  accessBanExpires: 'Access will be restored at',
   
   settingsTitle: 'Settings',
   settingsProfile: 'Profile',
