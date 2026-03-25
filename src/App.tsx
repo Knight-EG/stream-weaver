@@ -19,6 +19,7 @@ import Subscription from "./pages/Subscription.tsx";
 import ResellerPanel from "./pages/ResellerPanel.tsx";
 import Movies from "./pages/Movies.tsx";
 import Series from "./pages/Series.tsx";
+import Activate from "./pages/Activate.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
