@@ -683,6 +683,10 @@ const tr: TranslationKeys = {
   couponActive: 'Aktif',
   couponExpired: 'Süresi Dolmuş',
   
+  dashboardHome: 'Ana Sayfa',
+  dashboardLive: 'Canlı TV',
+  dashboardViewAll: 'Tümünü Gör',
+  
   moviesTitle: 'Filmler',
   moviesSearchPlaceholder: 'Film ara...',
   moviesEmpty: 'Film bulunamadı',
