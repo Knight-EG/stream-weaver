@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
 
             const liveChannels: Channel[] = streams.map((s: any) => ({
               id: `xt-${s.stream_id}`, name: s.name,
-              url: `${base}/live/${username}/${password}/${s.stream_id}.m3u8`,
+              url: `${base}/live/${username}/${password}/${s.stream_id}.ts`,
               logo: s.stream_icon || undefined, group: catMap.get(s.category_id) || 'Uncategorized', type: 'live' as const,
             }));
 
