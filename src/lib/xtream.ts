@@ -1,7 +1,5 @@
 import type { Channel, ParsedPlaylist } from './m3u-parser';
-
-export interface XtreamCredentials {
-  server: string;
+import { supabase } from '@/integrations/supabase/client';
   username: string;
   password: string;
 }
