@@ -168,4 +168,6 @@ function NotificationBellInner() {
       {panel}
     </div>
   );
-});
+}
+
+export const NotificationBell = memo(NotificationBellInner);
