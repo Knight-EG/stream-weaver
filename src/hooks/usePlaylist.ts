@@ -41,13 +41,7 @@ export function usePlaylist() {
     categoryIndex: new Map(),
   });
 
-  // Auto-load saved playlist source on mount
-  useEffect(() => {
-    const saved = loadSavedSource();
-    if (saved && state.channels.length === 0) {
-      loadPlaylist(saved);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-load is now handled by PlaylistManager
 
   // Load favorites from DB on mount
   useEffect(() => {
