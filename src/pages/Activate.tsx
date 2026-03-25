@@ -108,7 +108,7 @@ export default function Activate() {
       .from('tv_activations')
       .update({
         user_id: user!.id,
-        playlist_source: source as unknown as Record<string, unknown>,
+        playlist_source: source as unknown as Record<string, string>,
         status: 'active',
         activated_at: new Date().toISOString(),
       })
